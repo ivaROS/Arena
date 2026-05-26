@@ -299,6 +299,8 @@ class NetResolver(SimplePathResolver[IdentifierT], ResolverBase[IdentifierT], ty
         result = await self._batch_request(str(identifier.relpath()))
         if result is not None:
             self._cache[identifier] = result
+        elif candidate.is_dir():
+            self._cache[identifier] = candidate
 
         return self._cache.get(identifier, None)
 

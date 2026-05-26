@@ -12,6 +12,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl \
     python-is-python3 \
     python3-pip \
+    python3-venv \
+    python3-dev \
     pipx \
     python3-colcon-common-extensions \
     python3-rosdep \
@@ -20,7 +22,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     sudo \
     ros-jazzy-rmw-cyclonedds-cpp
 
-RUN pipx install git+https://github.com/voshch/vcstool.git
+RUN apt-get update && apt-get install -y python3-build
+
+RUN pipx install --verbose git+https://github.com/voshch/vcstool.git || \
+    (echo "==== PIPX LOGS ====" && \
+     find /root/.local/state/pipx/log -type f | xargs cat && false)
 
 WORKDIR /opt/arena_ws
 

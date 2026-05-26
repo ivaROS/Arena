@@ -1,7 +1,7 @@
 #!/bin/bash -i
 set -e
 
-export ARENA_REPO=${ARENA_REPO:-https://github.com/voshch/Arena.git}
+export ARENA_REPO=${ARENA_REPO:-https://github.com/ivaROS/Arena.git}
 export ARENA_BRANCH=${ARENA_BRANCH:-jazzy}
 export ARENA_ROS_DISTRO=${ARENA_ROS_DISTRO:-jazzy}
 

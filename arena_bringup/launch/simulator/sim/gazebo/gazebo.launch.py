@@ -8,7 +8,6 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-from arena_bringup.future import IfElseSubstitution, PythonExpression  # noqa
 from arena_bringup.substitutions import LaunchArgument
 
 
@@ -52,6 +51,16 @@ def generate_launch_description():
     import subprocess
     subprocess.run(['ros2', 'run', 'arena_simulation_setup', 'model_staging', staging_path])
 
+    arena_dir = os.environ.get('ARENA_DIR', '')
+    if not arena_dir or not os.path.isdir(arena_dir):
+        arena_dir = os.path.join(os.getcwd(), 'src', 'Arena')
+    if not os.path.isdir(arena_dir):
+        # ss_root: /opt/arena_ws/install/arena_simulation_setup/share/arena_simulation_setup
+        arena_dir = os.path.abspath(os.path.join(ss_root, '..', '..', '..', '..', 'src', 'Arena'))
+    
+    arena_dir = os.path.normpath(arena_dir)
+    assets_dir = os.path.join(arena_dir, '_assets')
+
     GZ_SIM_RESOURCE_PATHS = [
         os.path.join(staging_path),
         robots_root,
@@ -59,6 +68,11 @@ def generate_launch_description():
         os.path.join(ss_root, "assets", "Common", "Pedestrian", "arenian", "arenian.sdf"),
         os.path.join(ss_root, "assets", "Common", "Pedestrian", "arenian"),
     ]
+
+    if os.path.isdir(assets_dir):
+        for root, dirs, _ in os.walk(assets_dir):
+            if any(f.endswith('.sdf') for f in os.listdir(root)):
+                GZ_SIM_RESOURCE_PATHS.append(root)
 
     deps_file = os.path.join(staging_path, 'deps')
     if os.path.isfile(deps_file):
@@ -88,27 +102,27 @@ def generate_launch_description():
     os.environ["GAZEBO_MODEL_PATH"] = GZ_SIM_RESOURCE_PATHS_COMBINED
     # os.environ["GZ_SIM_PHYSICS_ENGINE_PATH"] = GZ_SIM_PHYSICS_ENGINE_PATH
 
-    desired_world = PathJoinSubstitution([
-        ss_root,
-        "worlds",
-        world.substitution,
-        "worlds",
-        PythonExpression(['"', world.substitution, '.world"']),
-    ])
-
-    world_path = IfElseSubstitution(
-        condition=PythonExpression(['not os.path.isfile("', desired_world, '")'], python_modules=['os']),
-        if_value=PathJoinSubstitution([
-            package_root,
-            'configs',
-            'gazebo',
-            'empty.sdf',
-        ]),
-        else_value=desired_world,
-    )
-
     def _launch_gazebo(context, *args, **kwargs):
-        resolved_world = context.perform_substitution(world_path)
+        world_val = context.perform_substitution(world.substitution)
+        
+        desired_world_path = os.path.join(
+            ss_root,
+            "worlds",
+            world_val,
+            "worlds",
+            f"{world_val}.world"
+        )
+        
+        if os.path.isfile(desired_world_path):
+            resolved_world = desired_world_path
+        else:
+            resolved_world = os.path.join(
+                package_root,
+                'configs',
+                'gazebo',
+                'empty.sdf',
+            )
+
         headless_val = context.perform_substitution(headless.substitution)
         gz_args = resolved_world + " -r --render-engine ogre"
         if headless_val.lower() in ("true", "1"):
@@ -151,6 +165,7 @@ def generate_launch_description():
             use_sim_time,
             world,
             headless,
+            SetEnvironmentVariable('ARENA_ASSETS_DIR', assets_dir),
             # SetEnvironmentVariable(
             #     "GZ_SIM_PHYSICS_ENGINE_PATH", GZ_SIM_PHYSICS_ENGINE_PATH
             # ),

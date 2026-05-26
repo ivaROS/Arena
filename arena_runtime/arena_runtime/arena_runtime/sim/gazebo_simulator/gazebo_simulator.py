@@ -205,9 +205,27 @@ class GazeboSimulator(BaseSim):
         return render_ros2_control_yaml(config_uri, robot.sim_path, frame_prefix)
 
     async def obstacle_spawn(self, obstacles: Sequence[Obstacle]) -> Sequence[bool]:
+        # Pre-resolve models to allow batching of net fetch requests
+        async def _resolve(obs: Obstacle):
+            try:
+                await obs.model.resolve()
+            except Exception:
+                # ignore errors here, they will be caught and logged during actual spawn
+                pass
+
+        await asyncio.gather(*(_resolve(o) for o in obstacles))
         return await asyncio.gather(*map(self._spawn_entity, obstacles))
 
     async def pedestrian_spawn(self, pedestrians: Sequence[DynamicObstacle]) -> Sequence[bool]:
+        # Pre-resolve models to allow batching of net fetch requests
+        async def _resolve(obs: Obstacle):
+            try:
+                await obs.model.resolve()
+            except Exception:
+                # ignore errors here, they will be caught and logged during actual spawn
+                pass
+
+        await asyncio.gather(*(_resolve(p) for p in pedestrians))
         return await asyncio.gather(*map(self._spawn_entity, pedestrians))
 
     async def robot_spawn(self, robots: Sequence[Robot]) -> Sequence[bool]:
@@ -326,39 +344,30 @@ class GazeboSimulator(BaseSim):
                     return False
 
                 if model.path and model.type not in (ModelType.URDF,):
-                    # direct path available, use gz cli call
-                    world_name = "default"
+                    # direct path available, use ros service call
                     sdf_path = model.path
                     # Resolve directory to actual SDF file (Gazebo requires a file, not a directory)
                     if sdf_path.is_dir():
                         candidate = sdf_path / f"{sdf_path.name}.sdf"
-                        if candidate.exists():
+                        if candidate.is_file():
                             sdf_path = candidate
                         else:
-                            candidates = list(sdf_path.glob("*.sdf"))
-                            if candidates:
-                                sdf_path = candidates[0]
-                    service_name = f"/world/{world_name}/create"
+                            # Also check for nested SDF file if directory is named ModelName.sdf
+                            candidate = sdf_path / f"{sdf_path.name}.sdf" / f"{sdf_path.name}.sdf"
+                            if candidate.is_file():
+                                sdf_path = candidate
+                            else:
+                                candidates = list(sdf_path.glob("**/*.sdf"))
+                                if candidates:
+                                    sdf_path = candidates[0]
+                                else:
+                                    self._logger.error(f"Failed to find .sdf file in directory {sdf_path}")
+                                    return False
 
-                    req_payload = (
-                        f'sdf_filename: "{sdf_path}", '
-                        f'name: "{entity.sim_path}", '
-                        f'pose: {{ '
-                        f'  position: {{ x: {entity.pose.position.x}, y: {entity.pose.position.y}, z: {entity.pose.position.z} }} '
-                        f'  orientation: {{ x: {entity.pose.orientation.x}, y: {entity.pose.orientation.y}, z: {entity.pose.orientation.z}, w: {entity.pose.orientation.w} }} '
-                        f'}}'
-                    )
-
-                    process = await asyncio.create_subprocess_exec('gz', 'service', '-s', service_name, '--reqtype', 'gz.msgs.EntityFactory', '--reptype', 'gz.msgs.Boolean', '--timeout', '2000', '--req', req_payload, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-
-                    stdout, stderr = await process.communicate()
-
-                    if process.returncode == 0:
-                        self._spawned_names.add(entity.sim_path)
-                        return True
-                    else:
-                        self._logger.error(f"Failed to spawn {entity.sim_path}. Error: {stderr.decode().strip()}")
-                        return False
+                    ok = await self._spawn_sdf_file(entity.sim_path, str(sdf_path), entity.pose)
+                    if ok:
+                        self.entities[entity.name] = entity
+                    return ok
 
                 else:
                     ok = await self._spawn_sdf(entity.sim_path, model.description, entity.pose)
@@ -377,6 +386,28 @@ class GazeboSimulator(BaseSim):
         request.entity_factory = EntityFactory()
         request.entity_factory.name = name
         request.entity_factory.sdf = sdf
+        request.entity_factory.pose = pose.to_msg()
+
+        try:
+            result = await self._service_spawn_entity.call_timeout(request)
+        except Exception as e:
+            self._logger.error(f"Spawn service call raised for {name}: {e}")
+            return False
+
+        if result is None:
+            self._logger.error(f"Spawn service call failed for {name}")
+            return False
+
+        if result.success:
+            self._spawned_names.add(name)
+        return result.success
+
+    async def _spawn_sdf_file(self, name: str, sdf_filename: str, pose: Pose) -> bool:
+        """Spawn from an SDF file via ros_gz_bridge. Caller holds self._semaphore."""
+        request = SpawnEntity.Request()
+        request.entity_factory = EntityFactory()
+        request.entity_factory.name = name
+        request.entity_factory.sdf_filename = sdf_filename
         request.entity_factory.pose = pose.to_msg()
 
         try:

@@ -4,7 +4,7 @@
 	update = rebase
 [submodule "arena_evaluation"]
 	path = arena_evaluation
-	url = https://github.com/voshch/arena-evaluation.git
+	url = https://github.com/ivaROS/arena-evaluation-6.git
 	update = rebase
 [submodule "arena_isaac"]
 	path = arena_isaac
