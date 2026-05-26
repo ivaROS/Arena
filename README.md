@@ -14,7 +14,7 @@ Afterwards, run the following commands to install Arena:
 ### Basic Installation
 
 ```sh
-curl https://raw.githubusercontent.com/voshch/Arena/jazzy/install.sh > install.sh
+curl https://raw.githubusercontent.com/ivaROS/Arena/jazzy/install.sh > install.sh
 bash install.sh
 ```
 and follow the prompts. This will create a ROS 2 workspace at your target location and instruct you how to proceed (yellow text).
@@ -25,9 +25,12 @@ and follow the prompts. This will create a ROS 2 workspace at your target locati
 cd ~/arena_ws # replace with your actual workspace path
 source arena
 arena feature isaac install # optional
-arena feature gazebo install # optional
+arena feature gazebo install
 arena feature training install # optional
+arena feature evaluation install #optional
+arena feature robots add jackal
 arena feature vllm install # optional: local LLM backend
+arena feature docker commit #do it every time you're done updating/pulling
 ```
 
 We recommend installing at least one simulator.
