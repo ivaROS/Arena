@@ -2,7 +2,7 @@
 set -e
 
 export ARENA_REPO=${ARENA_REPO:-https://github.com/ivaROS/Arena.git}
-export ARENA_BRANCH=${ARENA_BRANCH:-jazzy}
+export ARENA_BRANCH=${ARENA_BRANCH:-griffin_working}
 export ARENA_ROS_DISTRO=${ARENA_ROS_DISTRO:-jazzy}
 
 read_default(){
