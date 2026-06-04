@@ -62,10 +62,17 @@ arena feature gazebo install      # Gazebo simulator
 arena feature isaac install       # Isaac Sim simulator (heavier; needs more VRAM)
 arena feature training install    # rosnav_rl DRL training stack
 arena feature planners install    # external DRL planner bridge (DRL-VO, CrowdNav, SICNav)
+arena feature evaluation install  # benchmarking / metrics tooling
 arena feature vllm install        # optional local LLM backend (for prompt-based tasks)
+
+arena feature robots add jackal   # pull a robot's assets/deps before first use
 ```
 
 The CLI handles dependencies and `colcon build`; rebuild only when prompted.
+
+> **Persist your image after updates.** After installing features or pulling new
+> code, run `arena feature docker commit` to bake the current container state into
+> the image — otherwise the changes are re-applied on every fresh container.
 
 <details>
 <summary><b>vllm</b> (local LLM backend) details</summary>
