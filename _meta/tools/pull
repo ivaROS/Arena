@@ -24,7 +24,12 @@ python -m pip install git+https://github.com/voshch/vcstool.git || echo 'failed 
 #update repos
 if [ $_GIT -eq 1 ] ; then
     echo updating Arena...
-    git pull --ff-only --autostash && git submodule update --recursive
+    # sync propagates submodule URL changes (e.g. repointed forks) into .git/config;
+    # --init clones newly added submodules. Without these a pull silently skips
+    # new/moved submodules and an existing checkout misses them.
+    git pull --ff-only --autostash \
+        && git submodule sync --recursive \
+        && git submodule update --init --recursive
 
     # re-source
     . "$ARENA_DIR/_meta/tools/source"
