@@ -6,7 +6,7 @@ import shapely
 
 from arena_simulation_setup.shared import Door, Position, Wall
 
-from . import BaseConfiguration, WorldDescription, WorldGeneratorImpl
+from . import BaseConfiguration, LevelDescription, WorldGeneratorImpl
 from .utils import to_corners, to_walls
 
 logger = logging.getLogger(__name__)
@@ -52,20 +52,20 @@ class WorldGeneratorHallway(WorldGeneratorImpl):
         self.config = self.Configuration.model_validate(configuration)
         logger.info(self.config)
 
-    def compute(self) -> WorldDescription:
+    def compute(self) -> LevelDescription:
         top_rooms = self._impl("top", self.config.rooms_per_side)
         bottom_rooms = self._impl("bottom", self.config.rooms_per_side)
 
-        return WorldDescription(zones=[*top_rooms, *bottom_rooms])
+        return LevelDescription(zones=[*top_rooms, *bottom_rooms])
 
-    def _impl(self, side: str, num_rooms: int) -> Iterable[WorldDescription.Zone]:
-        rooms: list[WorldDescription.Zone] = []
+    def _impl(self, side: str, num_rooms: int) -> Iterable[LevelDescription.Zone]:
+        rooms: list[LevelDescription.Zone] = []
 
         widths: list[float] = []
         heights: list[float] = []
 
         rooms.append(
-            WorldDescription.Zone(
+            LevelDescription.Zone(
                 name=f"{side}_room_{len(rooms)}",
                 corners=[Position(x=0, y=self.config.hallway_bottom), Position(x=self.config.width, y=self.config.hallway_bottom), Position(x=self.config.width, y=self.config.hallway_top), Position(x=0, y=self.config.hallway_top)],
                 walls=[
@@ -125,7 +125,7 @@ class WorldGeneratorHallway(WorldGeneratorImpl):
             room_walls = shapely.difference(room_polygon.exterior, door_polygon)
 
             rooms.append(
-                WorldDescription.Zone(
+                LevelDescription.Zone(
                     name=f"{side}_room_{len(rooms)}",
                     corners=to_corners(room_polygon),
                     walls=to_walls(room_walls),

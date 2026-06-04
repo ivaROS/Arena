@@ -99,7 +99,7 @@ class DummySimulator(BaseSim):
         return tuple(True for _ in pedestrians.pedestrians)
 
     # world interface
-    async def spawn_walls(self, walls: Sequence[Wall]) -> bool:
+    async def spawn_walls(self, walls: Sequence[Wall], clear_existing: bool = True) -> bool:
         async def resolve(wall: Wall):
             sub_walls_iter, obs_iter = await wall.assets()
             sub_walls = tuple(sub_walls_iter)
@@ -116,14 +116,23 @@ class DummySimulator(BaseSim):
         await asyncio.gather(*(self.safe_resolve(floor.material) for floor in floors))
         return True
 
+    async def remove_world(self) -> bool:
+        self._logger.debug('removing all walls and doors')
+        return True
+
+    # mechanism interface
     async def spawn_doors(self, doors: Sequence[Door]) -> bool:
         await asyncio.gather(*(self.safe_resolve(door.material) for door in doors))
+        return True
+
+    async def remove_doors(self, names: Sequence[str]) -> bool:
+        self._logger.debug(f'removing {len(names)} doors')
         return True
 
     async def spawn_elevators(self, elevators: Sequence[Elevator]) -> bool:
         await asyncio.gather(*(self.safe_resolve(elevator.material) for elevator in elevators))
         return True
 
-    async def remove_world(self) -> bool:
-        self._logger.debug('removing all walls and doors')
+    async def remove_elevators(self, names: Sequence[str]) -> bool:
+        self._logger.debug(f'removing {len(names)} elevators')
         return True

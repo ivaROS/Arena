@@ -1,8 +1,9 @@
 import abc
 import asyncio
 import typing
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
+from arena_people_msgs.msg import Pedestrian, Pedestrians
 from arena_rclpy_mixins.registry import AsyncFactoryRegistry as Registry
 from arena_rclpy_mixins.shared import Namespace
 from arena_runtime._node import NodeInterface
@@ -28,6 +29,39 @@ class BaseHumanSimulator(NodeInterface, abc.ABC):
         self._namespace = namespace
 
         self._known_obstacles = KnownObstacles[Obstacle]()
+
+        self._ped_positions_xy: dict[str, tuple[float, float]] = {}
+        self.node.create_subscription(
+            Pedestrians,
+            self._namespace("arena_peds"),
+            self._on_arena_peds,
+            10,
+        )
+        self._simulator.attach_human_simulator(self)
+
+    def _on_arena_peds(self, msg: Pedestrians) -> None:
+        self._ped_positions_xy = {p.name: (p.pose.position.x, p.pose.position.y) for p in msg.pedestrians}
+
+    def pedestrian_positions_xy(self) -> Iterable[tuple[str, tuple[float, float]]]:
+        return list(self._ped_positions_xy.items())
+
+    async def pedestrian_teleport(self, destinations: Mapping[str, tuple[float, float]]) -> bool:
+        """Teleport tracked pedestrians to given (x, y). Default impl asks the sim to move them."""
+        if not destinations:
+            return True
+        peds_msg = Pedestrians()
+        for name, (x, y) in destinations.items():
+            ped = Pedestrian()
+            ped.name = name
+            cur = self._ped_positions_xy.get(name)
+            ped.pose.position.x = x
+            ped.pose.position.y = y
+            ped.pose.position.z = 0.0
+            peds_msg.pedestrians.append(ped)
+            if cur is not None:
+                self._ped_positions_xy[name] = (x, y)
+        results = await self._simulator.pedestrian_update(peds_msg)
+        return all(results)
 
     async def spawn_obstacles(self, obstacles: Sequence[Obstacle], layer: ObstacleLayer = ObstacleLayer.INUSE):
         """Spawns static obstacles.
@@ -126,7 +160,7 @@ class BaseHumanSimulator(NodeInterface, abc.ABC):
         """
         await asyncio.gather(
             self._simulator.spawn_doors(doors),
-            self._simulator.spawn_walls(walls),
+            self._simulator.spawn_walls(walls, clear_existing=False),
             self._spawn_walls_impl(walls),
             self._spawn_doors_impl(doors),
         )

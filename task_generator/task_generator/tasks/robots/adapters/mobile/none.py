@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     bringup=NoneBringup,
     client=GotoPoseClient,
     cap="mobile",
-    republishes_goal=True,
 )
 class NoneAdapter(MobileAdapter):
     kind: ClassVar[str] = "none"

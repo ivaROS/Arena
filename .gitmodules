@@ -15,109 +15,11 @@
 	url = https://github.com/Arena-Rosnav/Arena-Training.git
 	branch = main
 	update = rebase
-[submodule "arena_robots/deps/jackal"]
-	path = arena_robots/deps/jackal
-	url = https://github.com/jackal/jackal.git
-	robot = jackal
-	update = none
-[submodule "arena_robots/deps/turtlebot4"]
-	path = arena_robots/deps/turtlebot4
-	url = https://github.com/turtlebot/turtlebot4.git
-	robot = turtlebot
-	update = none
-[submodule "arena_robots/arena_robots/robots/boxer/meshes"]
-	path = arena_robots/arena_robots/robots/boxer/meshes
-	url = https://github.com/arena-robots/boxer.git
-	update = none
-	robot = boxer
-[submodule "arena_robots/arena_robots/robots/dingo/meshes"]
-	path = arena_robots/arena_robots/robots/dingo/meshes
-	url = https://github.com/arena-robots/dingo.git
-	update = none
-	robot = dingo
-[submodule "arena_robots/arena_robots/robots/husky/meshes"]
-	path = arena_robots/arena_robots/robots/husky/meshes
-	url = https://github.com/arena-robots/husky.git
-	update = none
-	robot = husky
-[submodule "arena_robots/arena_robots/robots/rbkairos/meshes"]
-	path = arena_robots/arena_robots/robots/rbkairos/meshes
-	url = https://github.com/arena-robots/rbkairos.git
-	update = none
-	robot = rbkairos rbkairos_plus
-[submodule "arena_robots/arena_robots/robots/rbrobout/meshes"]
-	path = arena_robots/arena_robots/robots/rbrobout/meshes
-	url = https://github.com/arena-robots/rbrobout.git
-	update = none
-	robot = rbrobout rbrobout_plus
-[submodule "arena_robots/arena_robots/robots/rbsummit/meshes"]
-	path = arena_robots/arena_robots/robots/rbsummit/meshes
-	url = https://github.com/arena-robots/rbsummit.git
-	update = none
-	robot = rbsummit
-[submodule "arena_robots/arena_robots/robots/rbtheron/meshes"]
-	path = arena_robots/arena_robots/robots/rbtheron/meshes
-	url = https://github.com/arena-robots/rbtheron.git
-	update = none
-	robot = rbtheron
-[submodule "arena_robots/arena_robots/robots/rbvogui/meshes"]
-	path = arena_robots/arena_robots/robots/rbvogui/meshes
-	url = https://github.com/arena-robots/rbvogui.git
-	update = none
-	robot = rbvogui rbvogui_plus
-[submodule "arena_robots/arena_robots/robots/ridgeback/meshes"]
-	path = arena_robots/arena_robots/robots/ridgeback/meshes
-	url = https://github.com/arena-robots/ridgeback.git
-	update = none
-	robot = ridgeback
-[submodule "arena_robots/arena_robots/robots/rskomnidirectional/meshes"]
-	path = arena_robots/arena_robots/robots/rskomnidirectional/meshes
-	url = https://github.com/arena-robots/rskomnidirectional.git
-	update = none
-	robot = rskomnidirectional
-[submodule "arena_robots/arena_robots/robots/WLP311D/meshes"]
-	path = arena_robots/arena_robots/robots/WLP311D/meshes
-	url = https://github.com/arena-robots/WLP311D.git
-	update = none
-	robot = WLP311D
-[submodule "arena_robots/arena_robots/robots/WLP311E/meshes"]
-	path = arena_robots/arena_robots/robots/WLP311E/meshes
-	url = https://github.com/arena-robots/WLP311E.git
-	update = none
-	robot = WLP311E
-[submodule "arena_robots/deps/ur_description"]
-	path = arena_robots/deps/ur_description
-	url = https://github.com/UniversalRobots/Universal_Robots_ROS2_Description.git
-	branch = humble
-	update = none
-	robot = rbkairos_plus rbrobout_plus rbvogui_plus ridgeback_plus
-[submodule "arena_robots/deps/robotnik_description"]
-	path = arena_robots/deps/robotnik_description
-	url = https://github.com/RobotnikAutomation/robotnik_description.git
-	branch = jazzy-devel
-	update = none
-	robot = rbvogui_plus
-[submodule "arena_robots/deps/robotnik_sensors"]
-	path = arena_robots/deps/robotnik_sensors
-	url = https://github.com/RobotnikAutomation/robotnik_sensors.git
-	branch = jazzy-devel
-	update = none
-	robot = rbvogui_plus
-[submodule "arena_robots/deps/clearpath_common"]
-	path = arena_robots/deps/clearpath_common
-	url = https://github.com/clearpathrobotics/clearpath_common.git
-	branch = humble
-	update = none
-	robot = ridgeback_plus
-[submodule "arena_robots/deps/arena_swerve_controller"]
-	path = arena_robots/deps/arena_swerve_controller
-	url = https://github.com/arena-robots/arena_swerve_controller.git
+[submodule "arena_planners"]
+	path = arena_planners
+	url = https://github.com/arena-planners/arena_planners.git
 	branch = jazzy
-	update = none
-	robot = rbvogui rbvogui_plus
-[submodule "arena_robots/deps/arena_omni_drive_controller"]
-	path = arena_robots/deps/arena_omni_drive_controller
-	url = https://github.com/arena-robots/arena_omni_drive_controller.git
+[submodule "arena_robots"]
+	path = arena_robots
+	url = https://github.com/arena-robots/arena_robots.git
 	branch = jazzy
-	update = none
-	robot = rskomnidirectional

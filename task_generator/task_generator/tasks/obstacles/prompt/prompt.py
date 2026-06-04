@@ -20,7 +20,7 @@ from task_generator.utils.gpt import genai
 os.environ["PYGLET_HEADLESS"] = "true"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from arena_rclpy_mixins.ROSParamServer import ROSParamT
-from arena_simulation_setup.tree.World import WorldDescription, WorldIdentifier
+from arena_simulation_setup.tree.World import LevelDescription, WorldIdentifier
 from arena_simulation_setup.utils.cattrs import converter
 from arena_text_crowd.converters.arena_world_to_text_crowd_scenario import (
     arena_world_to_text_crowd_scenario,
@@ -103,13 +103,13 @@ class TM_Prompt(TM_Obstacles):
 
     _config: PromptConfig
 
-    def preprocess_world_description(self, world_description: WorldDescription) -> str:
+    def preprocess_world_description(self, world_description: LevelDescription) -> str:
         """
-        Preprocesses the world description, keeps corners and walls only and converts them to 2D format.
+        Preprocesses the floor description, keeps corners and walls only and converts them to 2D format.
 
         Args:
-            world_description : WorldDescription
-                The world description to preprocess.
+            world_description : LevelDescription
+                The level description to preprocess.
 
         Returns:
             parsed : str
@@ -244,7 +244,8 @@ class TM_Prompt(TM_Obstacles):
         # Get Arena World size
         x_min, y_min, x_max, y_max = np.inf, np.inf, -np.inf, -np.inf
 
-        for zones in self._ctx.world_manager.world.zones:
+        world = self._ctx.world_manager.world_compacted()
+        for zones in world.zones:
             x_min, y_min, x_max, y_max = (
                 min(x_min, *(corner.x for corner in zones.corners)),
                 min(y_min, *(corner.y for corner in zones.corners)),
@@ -267,7 +268,7 @@ class TM_Prompt(TM_Obstacles):
         return response, x_min, y_min, x_max, y_max
 
     async def _prompt_to_config(self, prompt: str, top_p: float, generation_mode: str, local: bool = False) -> dict:
-        world_info = self.preprocess_world_description(self._ctx.world_manager.world)
+        world_info = self.preprocess_world_description(self._ctx.world_manager.world_compacted())
 
         messages = []
         crowd_pedestrians = None
@@ -388,13 +389,13 @@ class TM_Prompt(TM_Obstacles):
             self._logger.debug(f"Set Arena World bounds response: {arena_world_bounds_res.success}, {arena_world_bounds_res.message}")
             self.velocity_field_visualizer.update_world_bounds(x_min, y_min, x_max, y_max)
 
-            scenario, arena_entity_to_semantic_entity_map = arena_world_to_text_crowd_scenario(self._ctx.world_manager.world, scenario_size=(1024, 1024))
+            scenario, arena_entity_to_semantic_entity_map = arena_world_to_text_crowd_scenario(self._ctx.world_manager.world_compacted(), scenario_size=(1024, 1024))
 
             self._logger.info("Generating velocity field...")
             velocity_field, crowd_pedestrians, text_crowd_scenario = cgp.generate(
                 prompt=ambient_agent_prompt,
                 scenario=scenario,
-                arena_world_description=self._ctx.world_manager.world,
+                arena_world_description=self._ctx.world_manager.world_compacted(),
                 arena_entity_to_semantic_entity_map=arena_entity_to_semantic_entity_map,
             )  # (n_groups, 64, 64, 2) (g, y, x, 2)
 

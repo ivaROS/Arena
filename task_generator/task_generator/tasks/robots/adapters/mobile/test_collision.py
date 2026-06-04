@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     bringup=TestCollisionBringup,
     client=GotoPoseClient,
     cap="mobile",
-    republishes_goal=True,
 )
 @requires_map_server
 class TestCollisionAdapter(MobileAdapter):

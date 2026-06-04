@@ -28,7 +28,6 @@ _log = logging.getLogger(__name__)
     bringup=MoveItArmBringup,
     clients={TaskKind.REACH_POSE: ReachPoseClient, TaskKind.PLAY_GESTURE: PlayGestureClient},
     cap="arm",
-    republishes_goal=False,
     displays=(
         AdapterDisplayHint(
             name="Planned Trajectory",

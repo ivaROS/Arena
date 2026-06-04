@@ -74,6 +74,18 @@ def controller_spawner_node(controller_name: str) -> launch_ros.actions.Node:
     )
 
 
+def odom_relay_node(odom_topic: str) -> launch_ros.actions.Node:
+    """Relay `<odom_topic>` (controller-specific) -> `odom` for the Arena convention."""
+    return launch_ros.actions.Node(
+        package='topic_tools',
+        executable='relay',
+        name='odom_relay',
+        output='screen',
+        arguments=[odom_topic, 'odom'],
+        parameters=[{'use_sim_time': True}],
+    )
+
+
 def twist_stamper_node(cmd_vel_topic: str, frame_id: str) -> launch_ros.actions.Node:
     """Stamp `cmd_vel` (Twist) -> `cmd_vel_out` (TwistStamped) for stamped controllers."""
     return launch_ros.actions.Node(

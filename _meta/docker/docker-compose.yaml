@@ -17,6 +17,7 @@ services:
       - "$HOST_ARENA_WS_DIR/build:/opt/arena_ws/build"
       - "$HOST_ARENA_WS_DIR/install:/opt/arena_ws/install"
       - "$HOST_ARENA_WS_DIR/log:/opt/arena_ws/log"
+      - "$HOST_ARENA_WS_DIR/.uv-python:/opt/arena_ws/.uv-python"
       - "$HOST_ARENA_WS_DIR/.env:/opt/arena_ws/.env"
       - "$HOST_ARENA_DATA_DIR:/opt/arena_ws/data"
     environment:
@@ -24,6 +25,7 @@ services:
       - TMPDIR=/tmp/shared
       - DISPLAY
       - UV_LINK_MODE=copy
+      - UV_PYTHON_INSTALL_DIR=/opt/arena_ws/.uv-python
       - ARENA_IMAGE
       - ARENA_IMAGE_TAG
       - ARENA_PROJECT_NAME

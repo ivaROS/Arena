@@ -129,7 +129,10 @@ class TM_Random(TM_Obstacles):
             return index
 
         waypoints_per_ped = 2
-        points = self._ctx.world_manager.get_positions_on_map(n=N_STATIC_OBSTACLES + N_INTERACTIVE_OBSTACLES + N_DYNAMIC_OBSTACLES * (1 + waypoints_per_ped), safe_dist=1)
+        points = self._ctx.world_manager.get_positions_on_map(
+            n=N_STATIC_OBSTACLES + N_INTERACTIVE_OBSTACLES + N_DYNAMIC_OBSTACLES * (1 + waypoints_per_ped),
+            safe_dist=1,
+        )
 
         positions = map(lambda pos: Pose(pos, orientation=Orientation.from_yaw(2 * np.pi * self.node.conf.General.RNG.value.random())), points[: (N_STATIC_OBSTACLES + N_INTERACTIVE_OBSTACLES + N_DYNAMIC_OBSTACLES)])
         waypoints = iter(points[(N_STATIC_OBSTACLES + N_INTERACTIVE_OBSTACLES + N_DYNAMIC_OBSTACLES) :])

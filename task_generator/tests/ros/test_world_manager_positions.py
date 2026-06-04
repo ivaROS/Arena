@@ -9,7 +9,8 @@ import pytest
 
 try:
     from arena_rclpy_mixins.Time import Time
-
+    from arena_simulation_setup.tree.World.World import LevelDescription
+    from arena_simulation_setup.utils.geometry import Position as GeoPosition
     from task_generator.manager.world_manager.utils import WorldLayers, WorldMap, WorldOccupancy
     from task_generator.manager.world_manager.world_manager import (
         WorldManager,
@@ -197,9 +198,49 @@ class TestGetPositionsOnMap:
         with pytest.raises(RuntimeError):
             wm.get_positions_on_map(n=5, safe_dist=2.0, forbid=False)
 
-    def test_forbidden_zones_kwarg_accepted(self):
-        """forbidden_zones routes through tf_posr2rect, which has a pre-existing column-flip — clearance is not yet enforced end-to-end."""
+    def test_forbidden_zones_enforced(self):
         wm = self.make_wm(empty_grid(80, 80), seed=3)
         zone = PositionRadius(x=2.0, y=2.0, radius=0.5)
         out = wm.get_positions_on_map(n=3, safe_dist=0.3, forbidden_zones=[zone], forbid=False)
         assert len(out) == 3
+        for p in out:
+            assert not (1.5 <= p.x <= 2.5 and 1.5 <= p.y <= 2.5), f"{p.x},{p.y} inside forbidden zone"
+
+
+class TestCoordinateTransforms:
+    def test_round_trip_asymmetric(self):
+        wm = make_map(empty_grid(40, 80), resolution=0.05, origin=(10.0, -5.0))
+        for x, y in [(10.5, -4.9), (12.0, -4.0), (13.5, -3.1)]:
+            row, col = wm.tf_pos2grid(Position(x=x, y=y))
+            back = wm.tf_grid2pos((row, col))
+            assert back.x == pytest.approx(x, abs=wm.resolution)
+            assert back.y == pytest.approx(y, abs=wm.resolution)
+
+    def test_orientation(self):
+        h, w, res, ox, oy = 40, 80, 0.05, 10.0, -5.0
+        wm = make_map(empty_grid(h, w), resolution=res, origin=(ox, oy))
+        max_y = oy + h * res
+        assert tuple(int(v) for v in wm.tf_pos2grid(Position(x=ox, y=max_y))) == (0, 0)
+        assert tuple(int(v) for v in wm.tf_pos2grid(Position(x=ox, y=oy))) == (h, 0)
+
+
+class TestRenderedSampling:
+    @staticmethod
+    def make_wm_from_level(level: LevelDescription, seed: int = 0) -> WorldManager:
+        wm = WorldManager.__new__(WorldManager)
+        wm._map = WorldMap.from_world_description(level, resolution=0.05, time=Time())
+        wm._multi_map = None
+        wm._detected_walls = None
+        rng = np.random.default_rng(seed)
+        wm._NodeInterface__node = SimpleNamespace(conf=SimpleNamespace(General=SimpleNamespace(RNG=SimpleNamespace(value=rng))))
+        return wm
+
+    def test_positions_land_inside_rendered_zone(self):
+        corners = [GeoPosition(10, 5), GeoPosition(30, 5), GeoPosition(30, 15), GeoPosition(10, 15), GeoPosition(10, 5)]
+        level = LevelDescription(zones=[LevelDescription.Zone(name="room", corners=corners)])
+        wm = self.make_wm_from_level(level)
+        out = wm.get_positions_on_map(n=10, safe_dist=0.3, forbid=False)
+        assert len(out) == 10
+        for p in out:
+            assert 10 <= p.x <= 30, f"x={p.x} outside rendered zone [10,30]"
+            assert 5 <= p.y <= 15, f"y={p.y} outside rendered zone [5,15]"

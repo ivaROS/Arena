@@ -42,15 +42,43 @@ Defined in [`_interface.py`](_interface.py):
 
 ### `WorldITF`
 
-[`_interface.py:79`](_interface.py#L79)
+[`_interface.py:116`](_interface.py#L116)
 
 | Abstract method | Signature |
 | --- | --- |
 | `spawn_walls` | `(Sequence[Wall]) -> bool` |
 | `spawn_floors` | `(Sequence[Floor]) -> bool` |
-| `spawn_doors` | `(Sequence[Door]) -> bool` |
-| `spawn_elevators` | `(Sequence[Elevator]) -> bool` |
 | `remove_world` | `() -> bool` (default raises `NotImplementedError`) |
+
+### `MechanismITF`
+
+[`_interface.py:138`](_interface.py#L138) — door and elevator orchestration. Provides concrete default implementations driven by an internal sim-time tick loop ([`_mechanism_shim.py`](_mechanism_shim.py)) on top of five box/robot primitives. Any simulator that implements the primitives gets door animation, elevator pair-teleport, and ped/robot teleport for free; simulators with native support can override the four top-level methods.
+
+| Default method | Signature | Purpose |
+| --- | --- | --- |
+| `spawn_doors` | `(Sequence[Door]) -> bool` | spawn door geometry + register runtime; starts the tick loop |
+| `remove_doors` | `(Sequence[str]) -> bool` | delete door geometry by name |
+| `spawn_elevators` | `(Sequence[Elevator]) -> bool` | spawn cabin walls + synthesized door per elevator |
+| `remove_elevators` | `(Sequence[str]) -> bool` | delete cabin geometry + synthesized door by name |
+| `stop_mechanisms` | `() -> None` | cancel the tick loop (call on shutdown) |
+| `attach_human_simulator` | `(HumanSimulator) -> None` | bind the human-sim Protocol that supplies ped positions + ped teleport |
+
+| Primitive (override required for default behavior) | Signature |
+| --- | --- |
+| `spawn_box` | `(name, size, pose) -> bool` |
+| `move_box` | `(name, pose) -> bool` |
+| `delete_box` | `(name) -> bool` |
+| `set_robot_pose` | `(sim_path, pose) -> bool` |
+| `robot_positions_xy` | `() -> Iterable[tuple[str, tuple[float, float]]]` (sync) |
+
+The `HumanSimulator` Protocol the shim consumes from the attached human-sim:
+
+| Method | Signature |
+| --- | --- |
+| `pedestrian_positions_xy` | `() -> Iterable[tuple[str, tuple[float, float]]]` (sync, ground truth) |
+| `pedestrian_teleport` | `(Mapping[str, tuple[float, float]]) -> bool` (async) |
+
+The attachment happens in `BaseHumanSimulator.__init__` (see [human simulator](../../../../task_generator/task_generator/simulators/human/README.md)). Without an attached human-sim, the shim still drives doors against `robot_positions_xy` alone and logs a no-op for ped teleports.
 
 ### `SimLifecycle`
 
@@ -69,7 +97,7 @@ Registered in `LifecycleRegistry` alongside `SimulatorRegistry` ([`__init__.py`]
 [`__init__.py:17`](__init__.py#L17)
 
 ```python
-class BaseSim(NodeInterface, ObstacleITF, PedestrianITF, RobotITF, WorldITF, abc.ABC):
+class BaseSim(NodeInterface, ObstacleITF, PedestrianITF, RobotITF, WorldITF, MechanismITF, abc.ABC):
 ```
 
 Additional abstract methods:
@@ -105,7 +133,13 @@ instantiated via `SimulatorRegistry.get(key, **kwargs)`.
 
 1. Subclass `BaseSim`; implement all abstract methods from the four
    sub-interfaces plus `before_reset_episode` and `after_reset_episode`.
-2. Register a lazy async factory:
+2. Implement the five `MechanismITF` primitives (`spawn_box`, `move_box`,
+   `delete_box`, `set_robot_pose`, `robot_positions_xy`) to get door + elevator
+   animation out of the box. Override `spawn_doors`/`remove_doors`/
+   `spawn_elevators`/`remove_elevators` only if the simulator has native door
+   support that supersedes the shim, and call `await self.stop_mechanisms()`
+   from `shutdown` if you use the defaults.
+3. Register a lazy async factory:
 
 ```python
 @SimulatorRegistry.register(Constants.SimSimulator.MY_SIM)
@@ -114,4 +148,4 @@ async def lazy_mysim(**kwargs):
     return await MySimulator.create(**kwargs)
 ```
 
-3. Add `MY_SIM = "my_sim"` to `Constants.SimSimulator`.
+4. Add `MY_SIM = "my_sim"` to `Constants.SimSimulator`.

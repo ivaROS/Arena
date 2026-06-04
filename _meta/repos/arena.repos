@@ -25,10 +25,10 @@ repositories:
     type: git
     url: https://github.com/voshch/ament_cmake_venv
     version: humble
-  deps/ament_cmake_venv_pyenv:
+  deps/ament_cmake_venv_uv:
     type: git
-    url: https://github.com/voshch/ament_cmake_venv_pyenv
-    version: master
+    url: https://github.com/voshch/ament_cmake_venv_uv
+    version: jazzy
 
   # internal management
   deps/arena_models:
@@ -73,6 +73,11 @@ repositories:
   # type: git
   # url: https://github.com/ros/angles.git
   # version: ros2
+
+  deps/nav2/nav2_mask_overlay_layer:
+    type: git
+    url: https://github.com/voshch/nav2_mask_overlay_layer
+    version: jazzy
   
   deps/slam_toolbox:
     type: git

@@ -144,6 +144,11 @@ def generate_launch_description():
         default_value="",
         description="mobile adapter kind; empty = derive from arena_sim ({dummy: none, *: nav2})",
     )
+    planner = LaunchArgument(
+        name="planner",
+        default_value="",
+        description="top-level planner selector; resolves to mobile:=<adapter> mobile.<selector>:=<name> via arena_planners.resolver",
+    )
     arm = LaunchArgument(
         name="arm",
         default_value="moveit",
@@ -194,6 +199,35 @@ def generate_launch_description():
         arm_val = launch.utilities.perform_substitutions(
             context, launch.utilities.normalize_to_list_of_substitutions(arm.substitution)
         )
+
+        planner_val = launch.utilities.perform_substitutions(
+            context, launch.utilities.normalize_to_list_of_substitutions(planner.substitution)
+        )
+        _planner_selector_override: tuple[str, str] | None = None
+        if planner_val:
+            try:
+                from arena_planners.resolver import ResolverError, resolve
+            except ImportError as exc:
+                raise RuntimeError(
+                    f"arena_planners is not importable ({exc}); "
+                    "run `arena build --packages-select arena_planners` first"
+                ) from exc
+            try:
+                resolved = resolve(planner_val)
+            except ResolverError as exc:
+                raise RuntimeError(str(exc)) from exc
+            explicit_mobile = launch.utilities.perform_substitutions(
+                context, launch.utilities.normalize_to_list_of_substitutions(mobile.substitution)
+            )
+            if explicit_mobile and explicit_mobile != resolved.adapter_kind:
+                launch.logging.get_logger("task_generator.launch").warning(
+                    f"planner:={planner_val!r} resolves to mobile:={resolved.adapter_kind!r} "
+                    f"but mobile:={explicit_mobile!r} is set explicitly; "
+                    "explicit mobile:= wins"
+                )
+            else:
+                mobile_val = resolved.adapter_kind
+                _planner_selector_override = (resolved.selector_key, resolved.selector_value)
 
         human_launch = IncludeLaunchDescription(
             PathJoinSubstitution([
@@ -246,6 +280,11 @@ def generate_launch_description():
                 # kwarg in RobotManager._adapter_kwargs_for, overlaying the
                 # cap-file YAML for the bound adapter.
                 dotted_overrides[f"robot.{k}"] = _coerce(v)
+        if _planner_selector_override is not None:
+            sel_key, sel_val = _planner_selector_override
+            param_key = f"robot.mobile.{sel_key}"
+            if param_key not in dotted_overrides:
+                dotted_overrides[param_key] = sel_val
 
         # launch_ros.normalize_parameters turns list values into tuples and
         # yaml.dump emits them with !!python/tuple, which rcl drops silently.

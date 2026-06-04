@@ -442,6 +442,7 @@ class TaskGenerator(ArenaMixinNode, SafeCallbackNode, rclpy.lifecycle.LifecycleN
 
         self._logger.info("Setting up world manager")
         self._world_manager = WorldManager(node=self, environment_manager=self._environment_manager)
+
         await self._world_manager.start()
 
         self._logger.info("Setting up robots manager")
@@ -508,6 +509,7 @@ class TaskGenerator(ArenaMixinNode, SafeCallbackNode, rclpy.lifecycle.LifecycleN
                         topic_type=hint.topic_type,
                         rviz_class=hint.rviz_class,
                         config_json=_subst(hint.config_json),
+                        topic_must_exist=hint.topic_must_exist,
                     )
                     for hint in adapter.displays
                 ]

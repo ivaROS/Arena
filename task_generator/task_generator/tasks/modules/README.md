@@ -48,6 +48,12 @@ Parameters live under `task.<mode>.<leaf>`.
 Clears all dynamically forbidden map cells before each reset so obstacles
 from the previous episode do not pollute free-cell sampling.
 
+**Limitation (multi-level worlds):** `forbid_clear()` with no argument only clears the
+global (single-level) map. Per-level forbidden zones written via `forbid(..., level_id=X)`
+accumulate across resets and are not cleared by this module. This is a known gap for
+multi-level worlds; a follow-up should extend `forbid_clear()` to accept `level_id="*"`
+semantics that clears all per-level forbidden zones.
+
 ### `Mod_OverrideRobot`
 
 [`rviz_ui.py:8`](rviz_ui.py#L8)

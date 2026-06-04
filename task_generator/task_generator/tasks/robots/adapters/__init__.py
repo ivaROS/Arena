@@ -52,6 +52,7 @@ class AdapterCtx:
     robot_name: str
     frame: str
     task_generator_node: str
+    env_namespace: str
     use_sim_time: bool
     base_frame: str
     odom_frame: str
@@ -69,6 +70,7 @@ class AdapterDisplayHint:
     topic_type: str = ""
     rviz_class: str = ""
     config_json: str = ""
+    topic_must_exist: bool = False
 
 
 @attrs.frozen
@@ -84,7 +86,6 @@ class AdapterMeta:
     accepts: frozenset[TaskKind] = attrs.field(converter=frozenset)
     bringup: type[Bringup]
     cap: str
-    republishes_goal: bool = True
     displays: tuple[AdapterDisplayHint, ...] = attrs.field(default=(), converter=tuple)
     client: type[Client] | None = None
     clients: dict[TaskKind, type[Client]] | None = None
@@ -118,6 +119,7 @@ class Adapter(ABC):
     """Abstract base class for robot navstack adapters. Metadata is registry-driven."""
 
     kind: ClassVar[str]
+    cap_displays: ClassVar[tuple[AdapterDisplayHint, ...]] = ()
 
     def __init__(self, robot_manager: RobotManager, **bringup_kwargs: object) -> None:
         self.rm = robot_manager
@@ -168,12 +170,8 @@ class Adapter(ABC):
         return self._clients[tk]
 
     @property
-    def republishes_goal(self) -> bool:
-        return self._meta().republishes_goal
-
-    @property
     def displays(self) -> tuple[AdapterDisplayHint, ...]:
-        return self._meta().displays
+        return (*self.cap_displays, *self._meta().displays)
 
     @property
     def requires(self) -> frozenset[str]:
@@ -186,6 +184,7 @@ class Adapter(ABC):
                     use_sim_time=ctx.use_sim_time,
                     frame=ctx.frame,
                     task_generator_node=ctx.task_generator_node,
+                    env_namespace=ctx.env_namespace,
                     **self._bringup_kwargs,
                 ),
             ]

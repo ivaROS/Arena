@@ -4,7 +4,7 @@ import typing
 
 import pydantic
 
-from arena_simulation_setup.tree.World import WorldDescription
+from arena_simulation_setup.tree.World import LevelDescription
 
 
 class WorldGeneratorType(enum.Enum):
@@ -36,7 +36,7 @@ class WorldGeneratorImpl(abc.ABC):
     def configure(self, configuration: dict): ...
 
     @abc.abstractmethod
-    def compute(self) -> WorldDescription: ...
+    def compute(self) -> LevelDescription: ...
 
 
 class WorldGenerator:
@@ -51,7 +51,7 @@ class WorldGenerator:
 
         return wrap
 
-    def compute(self) -> WorldDescription:
+    def compute(self) -> LevelDescription:
         return self._active.compute()
 
     def update_generator(self, generator: WorldGeneratorType, configuration: dict):

@@ -2,7 +2,7 @@ import shapely
 
 from . import (
     BaseConfiguration,
-    WorldDescription,
+    LevelDescription,
     WorldGeneratorImpl,
 )
 from .utils import to_corners, to_walls
@@ -16,7 +16,7 @@ class WorldGeneratorEmpty(WorldGeneratorImpl):
     def configure(self, configuration: dict):
         self.config = self.Configuration.model_validate(configuration)
 
-    def compute(self) -> WorldDescription:
+    def compute(self) -> LevelDescription:
 
         room = shapely.Polygon(
             [
@@ -27,9 +27,9 @@ class WorldGeneratorEmpty(WorldGeneratorImpl):
             ]
         )
 
-        return WorldDescription(
+        return LevelDescription(
             zones=[
-                WorldDescription.Zone(
+                LevelDescription.Zone(
                     name="empty_zone",
                     corners=to_corners(room),
                     walls=to_walls(room),

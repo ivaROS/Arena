@@ -1,7 +1,9 @@
 """Interface definitions for simulator interactions with obstacles, pedestrians, robots, and lifecycle."""
 
 import abc
-from collections.abc import Sequence
+import asyncio
+import typing
+from collections.abc import Iterable, Mapping, Sequence
 
 from arena_people_msgs.msg import Pedestrians
 from task_generator.shared import (
@@ -10,9 +12,22 @@ from task_generator.shared import (
     Elevator,
     Floor,
     Obstacle,
+    Pose,
     Robot,
     Wall,
 )
+
+if typing.TYPE_CHECKING:
+    from arena_rclpy_mixins import ArenaMixinNode
+
+
+@typing.runtime_checkable
+class HumanSimulator(typing.Protocol):
+    """Capabilities the mechanism layer reads from the attached human simulator."""
+
+    def pedestrian_positions_xy(self) -> Iterable[tuple[str, tuple[float, float]]]: ...
+
+    async def pedestrian_teleport(self, destinations: Mapping[str, tuple[float, float]]) -> bool: ...
 
 
 class SimLifecycle(abc.ABC):
@@ -103,7 +118,7 @@ class RobotITF(abc.ABC):
 
 class WorldITF(abc.ABC):
     @abc.abstractmethod
-    async def spawn_walls(self, walls: Sequence[Wall]) -> bool:
+    async def spawn_walls(self, walls: Sequence[Wall], clear_existing: bool = True) -> bool:
         """
         Add a list of walls to the simulator.
         """
@@ -116,22 +131,104 @@ class WorldITF(abc.ABC):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod
-    async def spawn_doors(self, doors: Sequence[Door]) -> bool:
-        """
-        Add a list of doors to the simulator.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    async def spawn_elevators(self, elevators: Sequence[Elevator]) -> bool:
-        """
-        Add a list of elevators to the simulator.
-        """
-        raise NotImplementedError()
-
     async def remove_world(self) -> bool:
         """
         Remove every spawned world element.
         """
         raise NotImplementedError()
+
+
+class MechanismITF:
+    """Door + elevator orchestration with shim-backed defaults.
+
+    Defaults spawn box geometry, animate doors, and pair-teleport elevator cabins.
+    Simulators plug in by overriding the five primitives below. The attached
+    HumanSimulator supplies ground-truth ped positions and ped teleport.
+
+    The shim helpers read ``self.node`` (an ArenaMixinNode) for sim_time, the
+    rate loop, and logging. That attribute is provided by NodeInterface in the
+    BaseSim mixin chain; the annotation below makes the dependency type-visible
+    without forcing MechanismITF to inherit NodeInterface directly.
+    """
+
+    if typing.TYPE_CHECKING:
+        from ._mechanism_shim import _DoorRuntime, _ElevatorRuntime
+
+        node: ArenaMixinNode
+        _human_simulator: HumanSimulator | None
+        _door_runtime: dict[str, _DoorRuntime]
+        _elevator_runtime: dict[str, _ElevatorRuntime]
+        _door_primitives: dict[str, list[str]]
+        _elevator_primitives: dict[str, list[str]]
+        _elevator_doors: dict[str, str]
+        _mechanism_loop_task: asyncio.Task | None
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._human_simulator = None
+        self._door_runtime = {}
+        self._elevator_runtime = {}
+        self._door_primitives = {}
+        self._elevator_primitives = {}
+        self._elevator_doors = {}
+        self._mechanism_loop_task = None
+
+    def attach_human_simulator(self, hs: HumanSimulator) -> None:
+        """Attach a human simulator for ped position reads and teleport dispatch."""
+        self._human_simulator = hs
+
+    # defaults: shim logic. Override only if the simulator has native support.
+    async def spawn_doors(self, doors: Sequence[Door]) -> bool:
+        from ._mechanism_shim import shim_spawn_doors
+
+        return await shim_spawn_doors(self, doors)
+
+    async def remove_doors(self, names: Sequence[str]) -> bool:
+        from ._mechanism_shim import shim_remove_doors
+
+        return await shim_remove_doors(self, names)
+
+    async def spawn_elevators(self, elevators: Sequence[Elevator]) -> bool:
+        from ._mechanism_shim import shim_spawn_elevators
+
+        return await shim_spawn_elevators(self, elevators)
+
+    async def remove_elevators(self, names: Sequence[str]) -> bool:
+        from ._mechanism_shim import shim_remove_elevators
+
+        return await shim_remove_elevators(self, names)
+
+    async def stop_mechanisms(self) -> None:
+        """Cancel the mechanism tick loop if running."""
+        if self._mechanism_loop_task is not None and not self._mechanism_loop_task.done():
+            self._mechanism_loop_task.cancel()
+            try:
+                await self._mechanism_loop_task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._mechanism_loop_task = None
+
+    # primitives: simulators must implement these.
+    async def spawn_box(self, name: str, size: tuple[float, float, float], pose: Pose) -> bool:
+        """Spawn a static box primitive."""
+        raise NotImplementedError
+
+    async def move_box(self, name: str, pose: Pose) -> bool:
+        """Move a previously spawned box primitive."""
+        raise NotImplementedError
+
+    async def delete_box(self, name: str) -> bool:
+        """Delete a previously spawned box primitive."""
+        raise NotImplementedError
+
+    async def set_robot_pose(self, sim_path: str, pose: Pose) -> bool:
+        """Teleport a robot to the given pose."""
+        raise NotImplementedError
+
+    def robot_positions_xy(self) -> Iterable[tuple[str, tuple[float, float]]]:
+        """Yield (sim_path, (x, y)) for each tracked robot."""
+        raise NotImplementedError
+
+    def robot_pose(self, sim_path: str) -> Pose | None:
+        """Return the current full pose of a tracked robot, or None if unavailable."""
+        raise NotImplementedError

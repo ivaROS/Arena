@@ -1,8 +1,0 @@
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-norecursedirs = ["deps", ".git", ".venv", "build", "install", "log"]
-addopts = "-ra --strict-markers"
-markers = [
-    "ros: requires a sourced ROS2 environment",
-    "slow: long-running tests",
-]

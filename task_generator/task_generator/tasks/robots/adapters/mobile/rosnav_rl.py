@@ -35,13 +35,6 @@ if TYPE_CHECKING:
             rviz_class="rviz_default_plugins/Pose",
             config_json="",
         ),
-        AdapterDisplayHint(
-            name="Goal Pose",
-            topic="{ns}/goal_pose",
-            topic_type="geometry_msgs/PoseStamped",
-            rviz_class="rviz_default_plugins/Pose",
-            config_json="",
-        ),
     ],
 )
 @requires_map_server

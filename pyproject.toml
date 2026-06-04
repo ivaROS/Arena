@@ -46,9 +46,13 @@ dependencies = [
     "hypothesis",
     "pathfinding3d>=0.7.2",
     "transformers>=5.5.4",
+    "huggingface_hub",
     "diffusers>=0.37.1",
     "rasterio>=1.5.0",
     "pyglet>=2.1.14",
+    "msgpack>=1.0",
+    "msgpack-numpy>=0.4.8",
+    "pyzmq>=25",
 ]
 
 [build-system]
@@ -79,6 +83,7 @@ extend-exclude = [
     "arena_evaluation",
     "arena_training",
     "arena_robots/deps",
+    "arena_planners/planners",
     ".venv",
     "**/launch",
     "**/*.launch.py",

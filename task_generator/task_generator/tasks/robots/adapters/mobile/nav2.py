@@ -1,4 +1,4 @@
-"""Nav2 adapter — thin composer of Nav2Bringup + GotoPoseClient."""
+"""Nav2 adapter: thin composer of Nav2Bringup + GotoPoseClient."""
 
 from __future__ import annotations
 
@@ -31,22 +31,7 @@ if TYPE_CHECKING:
     bringup=Nav2Bringup,
     client=GotoPoseClient,
     cap="mobile",
-    republishes_goal=False,
     displays=[
-        AdapterDisplayHint(
-            name="Plan",
-            topic="{ns}/plan",
-            topic_type="nav_msgs/Path",
-            rviz_class="rviz_default_plugins/Path",
-            config_json="",
-        ),
-        AdapterDisplayHint(
-            name="Goal Pose",
-            topic="{ns}/goal_pose",
-            topic_type="geometry_msgs/PoseStamped",
-            rviz_class="rviz_default_plugins/Pose",
-            config_json="",
-        ),
         AdapterDisplayHint(
             name="Local Costmap",
             topic="{ns}/local_costmap/costmap",
@@ -81,6 +66,10 @@ if TYPE_CHECKING:
 class Nav2Adapter(MobileAdapter):
     kind: ClassVar[str] = "nav2"
 
+    async def publish_goal_loop(self) -> None:
+        # nav2 uses navigate_to_pose action; no topic republish.
+        return
+
     async def dispatch_phase(
         self,
         phase: TaskPhase,
@@ -88,6 +77,8 @@ class Nav2Adapter(MobileAdapter):
     ) -> None:
         assert isinstance(phase, GoToPhase), f"Nav2Adapter only accepts GOTO_POSE phases; got {type(phase).__name__} (kind={phase.kind!r})"
         robot._goal_pos = phase.pose  # pylint: disable=protected-access
+        if self.client.is_done() is False:
+            self.client.cancel()
         goal = GotoPose.Goal()
         goal.target = self._phase_to_pose_stamped(phase, robot)
         goal.pose_tolerance = float(phase.tolerance_radius or 0.0)
@@ -122,6 +113,8 @@ class Nav2Adapter(MobileAdapter):
         await super().wait_until_ready(robot, node_paths)
 
     async def on_reset(self, robot: RobotManager, ctx: ResetContext) -> None:
+        if self.client.is_done() is False:
+            self.client.cancel()
         await super().on_reset(robot, ctx)
         await self._clear_local_costmap(robot)
 
@@ -135,8 +128,6 @@ class Nav2Adapter(MobileAdapter):
         request = robot._current_request
         if request is None or robot._phase_index >= len(request.phases):
             return
-        if self.client.is_done() is False:
-            self.client.cancel()
         await self.dispatch_phase(request.phases[robot._phase_index], robot)
 
     async def _clear_local_costmap(

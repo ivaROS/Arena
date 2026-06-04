@@ -44,6 +44,8 @@ converter.register_structure_hook(ScenarioPhase, lambda v, _t: ScenarioPhase.par
 @attrs.define
 class RobotGoal(Parseable):
     start: Pose = attrs.field(converter=Pose.converter)
+    start_floor: str = attrs.field(default="")
+    goal_floor: str = attrs.field(default="")
     goal: Pose | None = attrs.field(default=None)
     phases: list[ScenarioPhase] | None = attrs.field(default=None)
 
@@ -61,6 +63,8 @@ class RobotGoal(Parseable):
         goal: Pose | None = Pose.parse(raw_goal) if raw_goal is not None else None
 
         return cls(
+            start_floor=obj.get("start_floor", ""),
+            goal_floor=obj.get("goal_floor", ""),
             start=Pose.parse(obj["start"]),
             goal=goal,
             phases=phases,

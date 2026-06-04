@@ -1,8 +1,0 @@
-bt_navigator:
-  ros__parameters:
-    default_nav_to_pose_bt_xml: "$(find-pkg-share arena_robots)/config/nav2/interplanners/navigate_w_replanning_speed/interplanner_behavior.xml"  
-    default_nav_through_poses_bt_xml: "" 
-    plugin_lib_names: []
-    error_code_names:
-      - compute_path_error_code
-      - follow_path_error_code

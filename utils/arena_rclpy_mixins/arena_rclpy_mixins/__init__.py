@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 
-class ArenaMixinNode(ROSParamServer, LifecycleClient, AsyncLifecycleClient, ServiceNamespace, TimeNode, rclpy.node.Node):
+class ArenaMixinNode(ROSParamServer, LifecycleClient, AsyncLifecycleClient, ServiceNamespace, AsyncNode, TimeNode, rclpy.node.Node):
     """Megaclass composing every arena_rclpy_mixins mixin onto rclpy.node.Node."""
 
     async def setup(self) -> None:

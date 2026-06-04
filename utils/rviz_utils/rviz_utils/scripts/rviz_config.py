@@ -370,10 +370,14 @@ class ConfigFileGenerator(ArenaMixinNode):
         robot_group['Displays'].append(Utils.Displays.odom(odom_topic, color))
 
         # adapter-declared displays for this robot
+        published_topic_names = {t for t, _ in self.topics}
         for entry in self.viz_manifest.entries:
             if entry.robot_ns != robot_ns:
                 continue
             for entry_display in entry.displays:
+                if entry_display.topic_must_exist and entry_display.topic not in published_topic_names:
+                    self.get_logger().info(f"skipping display {entry_display.name!r} for {robot_name}: topic {entry_display.topic} not advertised")
+                    continue
                 display: dict[str, object] = {
                     'Class': entry_display.rviz_class,
                     'Name': entry_display.name,

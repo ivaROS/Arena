@@ -48,6 +48,10 @@
       "path": "src/deps/hunav"
     },
     {
+      "name": "planners",
+      "path": "src/Arena/arena_planners/planners"
+    },
+    {
       "path": "src/Arena/arena_training"
     }
   ],

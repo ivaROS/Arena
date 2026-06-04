@@ -16,6 +16,13 @@ class TM_Obstacles(TaskMode):
 `Obstacles = tuple[list[Obstacle], list[DynamicObstacle]]`. The base
 implementation returns empty lists; every subclass overrides `reset`.
 
+`TM_Obstacles` is level-agnostic: it populates the whole compacted map (all loaded
+levels at once) via `get_position(s)_on_map` with no `level_id`. Which levels exist is
+decided at load time, not per reset: `world:=name` loads every level, `world:=name[0,3]`
+loads only levels 0 and 3. Geometry-driven modes read `world_manager.world_compacted()`
+(all levels merged into the map frame). Single-level worlds are the degenerate case and
+behave exactly as before.
+
 ## Shipped modes
 
 | Kind | Class | File | Behavior |

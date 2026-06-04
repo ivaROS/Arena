@@ -7,7 +7,7 @@ import shapely
 import shapely.affinity
 from arena_runtime._node import NodeInterface
 from arena_runtime.sim import BaseSim
-from arena_simulation_setup.tree.World import WorldDescription
+from arena_simulation_setup.tree.World import LevelDescription, WorldDescription
 
 from task_generator.manager.realizer import Realizer
 from task_generator.shared import (
@@ -87,23 +87,48 @@ class EnvironmentManager(NodeInterface):
         alive = set(self._human_simulator._known_obstacles.keys())
         self._static_polygons = {n: p for n, p in self._static_polygons.items() if n in alive}
 
-    async def spawn_world_obstacles(self, world: WorldDescription):
+    async def spawn_world_obstacles(self, world: WorldDescription | LevelDescription, level_id: str = ""):
         """
         Loads given obstacles into the simulator,
         the map file is retrieved from launch parameter "world"
         """
-        walls = tuple(map(self.realize, world.all_walls))
-        doors = tuple(map(self.realize, world.all_doors))
-        floors = tuple(map(self.realize, world.all_floors))
-        elevators = tuple(map(self.realize, world.all_elevators))
-        statics = tuple(map(self.realize, world.all_static_entities))
+        await self._spawn_world_obstacles(world, level_id)
+
+    async def _spawn_world_obstacles(self, world: WorldDescription | LevelDescription, level_id: str = "") -> None:
+
+        def _match_level_id(fid: str | None) -> bool:
+            target_id = level_id
+            if target_id == "":
+                return True
+            else:
+                if fid is not None:
+                    return target_id == fid
+                else:
+                    return False
+
+        _world = WorldDescription.from_levels(world) if isinstance(world, LevelDescription) else world
+        walls = tuple(self._realizer.realize(w, fid) for fid, level in _world.levels.items() if _match_level_id(fid) for w in level.all_walls)
+        doors = tuple(self._realizer.realize(d, fid) for fid, level in _world.levels.items() if _match_level_id(fid) for d in level.all_doors)
+        floors = tuple(self._realizer.realize(f, fid) for fid, level in _world.levels.items() if _match_level_id(fid) for f in level.all_floors)
+        elevators = tuple(self._realizer.realize(e, fid) for fid, level in _world.levels.items() if _match_level_id(fid) for e in level.all_elevators)
+        statics = tuple(self._realizer.realize(s, fid) for fid, level in _world.levels.items() if _match_level_id(fid) for s in level.all_static_entities)
 
         line_strings: list[shapely.LineString] = []
         for w in walls:
             line_strings.append(shapely.LineString([(w.start.x, w.start.y), (w.end.x, w.end.y)]))
         for d in doors:
             line_strings.append(shapely.LineString([(d.start.x, d.start.y), (d.end.x, d.end.y)]))
-        self._walls_geometry = shapely.MultiLineString(line_strings) if line_strings else shapely.MultiLineString()
+        if line_strings:
+            floor_walls = shapely.MultiLineString(line_strings)
+            if self._walls_geometry.is_empty:
+                self._walls_geometry = floor_walls
+            else:
+                self._walls_geometry = shapely.MultiLineString(
+                    [
+                        *self._walls_geometry.geoms,
+                        *floor_walls.geoms,
+                    ]
+                )
 
         await self._cache_polygons(statics)
 
@@ -122,14 +147,14 @@ class EnvironmentManager(NodeInterface):
         """
         Loads given dynamic obstacles into the simulator.
         """
-
-        await self._human_simulator.spawn_dynamic_obstacles(tuple(map(self.realize, setups)))
+        realized = tuple(self._realizer.realize(obstacle, obstacle.level_id or "") for obstacle in setups)
+        await self._human_simulator.spawn_dynamic_obstacles(realized)
 
     async def spawn_obstacles(self, setups: Collection[Obstacle]):
         """
         Loads given obstacles into the simulator.
         """
-        realized = tuple(map(self.realize, setups))
+        realized = tuple(self._realizer.realize(obstacle, obstacle.level_id or "") for obstacle in setups)
         await self._cache_polygons(realized)
         await self._human_simulator.spawn_obstacles(realized)
 

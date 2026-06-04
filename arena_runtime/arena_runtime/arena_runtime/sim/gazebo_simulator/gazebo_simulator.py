@@ -9,12 +9,14 @@ import math
 import time
 import traceback
 import typing
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 import arena_robots.Robot
 import launch
 import launch_ros
 import rclpy.impl.rcutils_logger
+import rclpy.time
+import tf2_ros
 from arena_people_msgs.msg import Pedestrian, Pedestrians
 from arena_rclpy_mixins import ArenaMixinNode
 from arena_rclpy_mixins.Async import ClientWrapper
@@ -25,14 +27,14 @@ from ros_gz_interfaces.msg import Entity as EntityMsg
 from ros_gz_interfaces.msg import EntityFactory, WorldControl
 from ros_gz_interfaces.srv import ControlWorld, DeleteEntity, SetEntityPose, SpawnEntity
 from task_generator.shared import (
-    Door,
     DynamicObstacle,
-    Elevator,
     Entity,
     Floor,
     ModelType,
     Obstacle,
+    Orientation,
     Pose,
+    Position,
     Robot,
     Wall,
 )
@@ -40,6 +42,7 @@ from task_generator.shared import (
 from arena_runtime.sim import BaseSim, SimLifecycle
 from arena_runtime.sim._control import (
     controller_spawner_node,
+    odom_relay_node,
     render_ros2_control_yaml,
     twist_stamper_node,
 )
@@ -176,6 +179,10 @@ class GazeboSimulator(BaseSim):
         self._wall_counter = itertools.count()
         self._spawned_names: set[str] = set()
 
+        self._agent_robots: dict[str, str] = {}
+        self._mechanism_tf_buffer = tf2_ros.Buffer()
+        self._mechanism_tf_listener = tf2_ros.TransformListener(self._mechanism_tf_buffer, self.node)
+
     async def before_reset_episode(self) -> bool:
         return True
 
@@ -240,6 +247,8 @@ class GazeboSimulator(BaseSim):
             model_description = model.description
             self._robot_initialpose(robot)
             await self._robot_bridge(robot, model_description)
+            robot_config = arena_robots.Robot.RobotIdentifier(robot.model.name).resolve_sync()
+            self._agent_robots[robot.sim_path] = robot.frame.tf(robot_config.model_params.base_frame)
             return True
 
         success = await asyncio.gather(*map(impl, robots))
@@ -266,6 +275,8 @@ class GazeboSimulator(BaseSim):
         return await asyncio.gather(*(self._delete_entity(p.sim_path) for p in pedestrians))
 
     async def robot_delete(self, robots: Sequence[Robot]) -> Sequence[bool]:
+        for robot in robots:
+            self._agent_robots.pop(robot.sim_path, None)
         return await asyncio.gather(*(self._delete_entity(robot.sim_path) for robot in robots))
 
     async def pedestrian_update(self, pedestrians: Pedestrians) -> Sequence[bool]:
@@ -283,15 +294,65 @@ class GazeboSimulator(BaseSim):
         del floors
         return True
 
-    async def spawn_doors(self, doors: Sequence[Door]) -> bool:
-        # Gazebo does not support spawning doors
-        del doors
+    def robot_positions_xy(self) -> Iterable[tuple[str, tuple[float, float]]]:
+        out: list[tuple[str, tuple[float, float]]] = []
+        for sim_path, frame in list(self._agent_robots.items()):
+            try:
+                t = self._mechanism_tf_buffer.lookup_transform('map', frame, rclpy.time.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                continue
+            out.append((sim_path, (t.transform.translation.x, t.transform.translation.y)))
+        return out
+
+    def robot_pose(self, sim_path: str) -> Pose | None:
+        frame = self._agent_robots.get(sim_path)
+        if frame is None:
+            return None
+        try:
+            t = self._mechanism_tf_buffer.lookup_transform('map', frame, rclpy.time.Time())
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            return None
+        tr = t.transform.translation
+        rot = t.transform.rotation
+        return Pose(
+            position=Position(x=tr.x, y=tr.y, z=tr.z),
+            orientation=Orientation(w=rot.w, x=rot.x, y=rot.y, z=rot.z),
+        )
+
+    async def set_robot_pose(self, sim_path: str, pose: Pose) -> bool:
+        if sim_path not in self._agent_robots:
+            return False
+        req = SetEntityPose.Request()
+        req.entity = EntityMsg(name=sim_path, type=EntityMsg.MODEL)
+        req.pose = pose.to_msg()
+        try:
+            res = await self._service_set_entity_pose.call_timeout(req)
+            return bool(res and res.success)
+        except Exception as e:
+            self._logger.warning(f"set_robot_pose({sim_path!r}) failed: {e}")
+            return False
+
+    async def spawn_box(self, name: str, size: tuple[float, float, float], pose: Pose) -> bool:
+        sdf = _generate_box_sdf(name, size)
+        async with self._semaphore:
+            return await self._spawn_sdf(name, sdf, pose)
+
+    async def move_box(self, name: str, pose: Pose) -> bool:
+        # Fire-and-forget: animation is cosmetic, last-write-wins. Awaiting the service round-trip
+        # would gate the shim's tick rate on bridge latency; skipping the semaphore lets parallel
+        # door updates issue concurrently.
+        request = SetEntityPose.Request()
+        request.entity = EntityMsg(name=name, type=EntityMsg.MODEL)
+        request.pose = pose.to_msg()
+        try:
+            self._service_set_entity_pose.client.call_async(request)
+        except Exception as e:
+            self._logger.warning(f"move_box dispatch failed for {name}: {e}")
+            return False
         return True
 
-    async def spawn_elevators(self, elevators: Sequence[Elevator]) -> bool:
-        # Gazebo does not support spawning elevators
-        del elevators
-        return True
+    async def delete_box(self, name: str) -> bool:
+        return await self._delete_entity(name)
 
     # IMPL
 
@@ -470,8 +531,9 @@ class GazeboSimulator(BaseSim):
                 traceback.print_exc()
                 return False
 
-    async def spawn_walls(self, walls: Sequence[Wall]) -> bool:
-        await self.remove_world()
+    async def spawn_walls(self, walls: Sequence[Wall], clear_existing: bool = True) -> bool:
+        if clear_existing:
+            await self.remove_world()
         for wall in walls:
             wall_name = self._realizer.realize(f"wall_{next(self._wall_counter)}")
             wall_sdf = _generate_wall_sdf(
@@ -567,6 +629,8 @@ class GazeboSimulator(BaseSim):
                     robot.frame.tf(robot_config.model_params.base_frame),
                 )
             )
+            if control_spec.odom_topic != "odom":
+                launch_description.add_action(odom_relay_node(control_spec.odom_topic))
 
         launch_description.add_action(
             launch_ros.actions.Node(
@@ -682,6 +746,8 @@ class GazeboSimulator(BaseSim):
         self._logger.info("All Gazebo services are available now.")
 
     async def shutdown(self) -> None:
+        await self.stop_mechanisms()
+
         async def _delete_one(name: str) -> None:
             async with self._semaphore:
                 req = DeleteEntity.Request()
@@ -765,3 +831,25 @@ def _generate_wall_sdf(
         )
 
     return sdf_template.format(name=name, base_x=base_x, base_y=base_y, base_z=base_z, links="\n".join(links))
+
+
+_BOX_SDF_TEMPLATE = """
+<sdf version="1.6">
+    <model name="{name}">
+        <static>true</static>
+        <link name="link">
+            <visual name="visual">
+                <geometry><box><size>{sx} {sy} {sz}</size></box></geometry>
+            </visual>
+            <collision name="collision">
+                <geometry><box><size>{sx} {sy} {sz}</size></box></geometry>
+            </collision>
+        </link>
+    </model>
+</sdf>
+"""
+
+
+def _generate_box_sdf(name: str, size: tuple[float, float, float]) -> str:
+    sx, sy, sz = size
+    return _BOX_SDF_TEMPLATE.format(name=name, sx=sx, sy=sy, sz=sz)

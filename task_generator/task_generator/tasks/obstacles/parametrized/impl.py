@@ -17,7 +17,10 @@ class TM_Parametrized(TM_Obstacles):
         return ParametrizedIdentifier(config_name).resolve_sync()
 
     def _get_pose(self) -> Pose:
-        return Pose(self._ctx.world_manager.get_position_on_map(1), Orientation.from_yaw(self.node.conf.General.RNG.value.random() * 2 * math.pi))
+        return Pose(
+            self._ctx.world_manager.get_position_on_map(1),
+            Orientation.from_yaw(self.node.conf.General.RNG.value.random() * 2 * math.pi),
+        )
 
     def _get_points(self, n: int) -> list:
         return self._ctx.world_manager.get_positions_on_map(n=n, safe_dist=1.0)

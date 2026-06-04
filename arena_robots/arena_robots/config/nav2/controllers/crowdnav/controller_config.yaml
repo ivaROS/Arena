@@ -1,5 +1,0 @@
-controller_plugins:
-  - FollowPath
-controller_plugins_dict:
-  FollowPath:
-    plugin: "nav2py_pas_crowdnav_controller::PasCrowdNavController"

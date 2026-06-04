@@ -17,6 +17,61 @@ def _write_yaml(path: str, data: object) -> None:
         yaml.dump(data, f)
 
 
+def _observation_source(data_type: str, topic: str) -> dict:
+    """One nav2 observation-source block, matching compile_sensors_to_nav2's shape.
+    obstacle_max_range sits a margin below raytrace_max_range to filter out Isaac's
+    phantom max-range returns. 3D clouds also carry a min_obstacle_height ground
+    floor; the flat scan does not."""
+    source = {
+        "topic": topic,
+        "data_type": data_type,
+        "max_obstacle_height": 2.0,
+        "clearing": True,
+        "marking": True,
+        "obstacle_max_range": 11.0,
+        "raytrace_max_range": 12.0,
+        "inf_is_valid": True,
+    }
+    if data_type == "PointCloud2":
+        source["min_obstacle_height"] = 0.1
+    return source
+
+
+def _nav2_costmap_fixture() -> tuple[dict, dict]:
+    """(substitutions, nav2-shaped params) mirroring config/nav2/nav2.yaml: the
+    `${**observation_sources_dict}` splat nested under both the global obstacle_layer
+    and the local voxel_layer, beside the `observation_sources` string. The same
+    sources dict feeds both layers, exactly as the real launch does."""
+    sources = {
+        "lidar": _observation_source("LaserScan", "${namespace}/scan"),
+        "lidar_points": _observation_source("PointCloud2", "${namespace}/points"),
+    }
+    subs_data = {
+        "namespace": "env_0",
+        "observation_sources_string": "lidar lidar_points",
+        "observation_sources_dict": sources,
+    }
+
+    def layer(plugin: str) -> dict:
+        return {
+            "plugin": plugin,
+            "observation_sources": "${observation_sources_string}",
+            "${**observation_sources_dict}": "",
+        }
+
+    obj_data = {
+        "global_costmap": {"global_costmap": {"ros__parameters": {
+            "use_sim_time": False,
+            "obstacle_layer": layer("nav2_costmap_2d::ObstacleLayer"),
+        }}},
+        "local_costmap": {"local_costmap": {"ros__parameters": {
+            "use_sim_time": False,
+            "voxel_layer": layer("nav2_costmap_2d::VoxelLayer"),
+        }}},
+    }
+    return subs_data, obj_data
+
+
 class TestLaunchArgument:
     def test_substitution_returns_launch_configuration(self) -> None:
         import launch.substitutions
@@ -426,6 +481,84 @@ class TestYAMLReplaceSubstitution:
             loaded = yaml.safe_load(fp)
         assert loaded["foo"] == "bar"
         os.unlink(result_path)
+
+    def test_dict_spread_nested_nav2_costmap(self, tmp_path: pytest.TempPathFactory) -> None:
+        """The observation-source splat must land per-source blocks at full costmap
+        depth, not just at the top level. If they fail to land, nav2 silently falls
+        back to its defaults (marking on, clearing off) and obstacles never clear."""
+        from arena_bringup.substitutions import YAMLFileSubstitution, YAMLReplaceSubstitution
+
+        subs_data, obj_data = _nav2_costmap_fixture()
+        subs_f = tmp_path / "subs_nav2.yaml"
+        obj_f = tmp_path / "obj_nav2.yaml"
+        _write_yaml(str(subs_f), subs_data)
+        _write_yaml(str(obj_f), obj_data)
+
+        ctx = _make_context()
+        result_path = YAMLReplaceSubstitution(
+            substitutions=YAMLFileSubstitution(str(subs_f)),
+            obj=YAMLFileSubstitution(str(obj_f)),
+        ).perform(ctx)
+        with open(result_path) as fp:
+            loaded = yaml.safe_load(fp)
+        os.unlink(result_path)
+
+        for costmap, layer_name in (("global_costmap", "obstacle_layer"), ("local_costmap", "voxel_layer")):
+            params = loaded[costmap][costmap]["ros__parameters"][layer_name]
+            assert "${**observation_sources_dict}" not in params
+            assert params["observation_sources"] == "lidar lidar_points"
+            assert {"lidar", "lidar_points"} <= set(params)
+            assert params["lidar"]["clearing"] is True
+            assert params["lidar"]["marking"] is True
+            assert params["lidar"]["raytrace_max_range"] == 12.0
+            assert params["lidar"]["obstacle_max_range"] == 11.0
+            assert params["lidar"]["inf_is_valid"] is True
+            assert params["lidar"]["data_type"] == "LaserScan"
+            # nested ${namespace} inside the spread-in block resolves too
+            assert params["lidar"]["topic"] == "env_0/scan"
+            assert params["lidar_points"]["data_type"] == "PointCloud2"
+            assert params["lidar_points"]["topic"] == "env_0/points"
+            # heterogeneous per-source keys land: the cloud gets a ground floor, the scan doesn't
+            assert params["lidar_points"]["min_obstacle_height"] == 0.1
+            assert "min_obstacle_height" not in params["lidar"]
+
+    def test_observation_sources_survive_rewritten_yaml(self, tmp_path: pytest.TempPathFactory) -> None:
+        """Full launch pipeline: YAMLReplaceSubstitution -> nav2's RewrittenYaml
+        (root_key + convert_types). Per-source blocks must survive intact alongside a
+        param_rewrite, since this rewritten file is what actually feeds the costmap nodes."""
+        from arena_bringup.substitutions import YAMLFileSubstitution, YAMLReplaceSubstitution
+        from nav2_common.launch import RewrittenYaml
+
+        subs_data, obj_data = _nav2_costmap_fixture()
+        subs_f = tmp_path / "subs_rw.yaml"
+        obj_f = tmp_path / "obj_rw.yaml"
+        _write_yaml(str(subs_f), subs_data)
+        _write_yaml(str(obj_f), obj_data)
+
+        ctx = _make_context()
+        replaced_path = YAMLReplaceSubstitution(
+            substitutions=YAMLFileSubstitution(str(subs_f)),
+            obj=YAMLFileSubstitution(str(obj_f)),
+        ).perform(ctx)
+
+        rewritten_path = RewrittenYaml(
+            source_file=replaced_path,
+            root_key="env_0",
+            param_rewrites={"use_sim_time": "true"},
+            convert_types=True,
+        ).perform(ctx)
+        with open(rewritten_path) as fp:
+            loaded = yaml.safe_load(fp)
+        os.unlink(replaced_path)
+
+        params = loaded["env_0"]["global_costmap"]["global_costmap"]["ros__parameters"]
+        assert params["use_sim_time"] is True
+        oc = params["obstacle_layer"]
+        assert oc["observation_sources"] == "lidar lidar_points"
+        assert oc["lidar"]["clearing"] is True
+        assert oc["lidar"]["raytrace_max_range"] == 12.0
+        assert oc["lidar"]["inf_is_valid"] is True
+        assert oc["lidar_points"]["clearing"] is True
 
 
 class TestCurrentNamespaceSubstitution:

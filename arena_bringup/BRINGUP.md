@@ -288,9 +288,9 @@ shapes of argument:
 
 | Shape | Example | Lands as | Purpose |
 |---|---|---|---|
-| `<cap>:=<kind>` | `mobile:=rosnav_rl` | `robot.<cap>_adapter` | Pick which `Bringup` runs for the cap. |
-| `<cap>.<key>:=<val>` | `mobile.local_planner:=teb` | `robot.<cap>.<key>` | Override a value from `caps/<cap>.yaml`. |
-| `<adapter-kwarg>:=<val>` | `global_planner:=smac` | `robot.<cap>.<key>` (via the adapter's launch file) | Adapter-internal launch kwargs (e.g. nav2's planner names). |
+| `<cap>:=<kind>` | `mobile:=rosnav_rl`, `mobile:=drl` | `robot.<cap>_adapter` | Pick which `Bringup` runs for the cap. |
+| `<cap>.<key>:=<val>` | `mobile.local_planner:=teb`, `mobile.planner:=drlvo` | `robot.<cap>.<key>` | Override a value from `caps/<cap>.yaml`. |
+| `<adapter-kwarg>:=<val>` | `global_planner:=smac`, `global_planner:=nav2/navfn` | `robot.<cap>.<key>` (via the adapter's launch file) | Adapter-internal launch kwargs (nav2 planner names, or the `<family>/<kind>` form consumed by the `drl` adapter). |
 
 The cap-scoped form is the recommended style because it's self-documenting and
 maps unambiguously to a single cap. To discover what `<key>`s a cap accepts,

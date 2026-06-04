@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from arena_simulation_setup.tree.World import WorldIdentifier
+from arena_simulation_setup.tree.World import WorldDescription, WorldIdentifier
 
 from . import WorldGenerator, WorldGeneratorType
 
@@ -10,7 +10,7 @@ __all__ = ['WorldGenerator', 'WorldGeneratorType']
 
 def test_generate(out: str, name: str, config: dict) -> Path:
     gen = WorldGenerator(WorldGeneratorType(name), config)
-    return WorldIdentifier(out).resolve_sync().save(gen.compute())
+    return WorldIdentifier(out).resolve_sync().save(WorldDescription.from_levels(gen.compute()))
 
 
 def main(argv: list[str] = sys.argv) -> None:

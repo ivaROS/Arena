@@ -4,7 +4,7 @@ import sys
 import std_srvs.srv
 from arena_rclpy_mixins.ServiceNamespace import ServiceNamespace
 
-from arena_simulation_setup.tree.World.World import WorldIdentifier
+from arena_simulation_setup.tree.World.World import WorldDescription, WorldIdentifier
 
 from .world_generator import WorldGenerator, WorldGeneratorType
 
@@ -22,7 +22,7 @@ class WorldGeneratorROS(WorldGenerator, ServiceNamespace):
     def _cb_generate(self, request: std_srvs.srv.Trigger.Request, response: std_srvs.srv.Trigger.Response) -> std_srvs.srv.Trigger.Response:
         try:
             self.update_generator(*self._get_parameters())
-            WorldIdentifier('.generated').resolve_sync().save(self.compute())
+            WorldIdentifier('.generated').resolve_sync().save(WorldDescription.from_levels(self.compute()))
             response.success = True
         except BaseException as e:
             response.success = False

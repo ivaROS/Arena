@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+_SDK_SUBDIR = "arena_robots"
 ROBOTS_PREFIX = "arena_robots/arena_robots/robots"
 
 
@@ -32,9 +33,9 @@ def arena_dir() -> Path:
 
 
 def submodule_status(arena: Path) -> dict[str, str]:
-    """{path: 'init'|'uninit'} for each submodule."""
+    """{path: 'init'|'uninit'} for each submodule (recursive, paths relative to Arena)."""
     out = subprocess.run(
-        ["git", "submodule", "status"], cwd=arena,
+        ["git", "submodule", "status", "--recursive"], cwd=arena,
         text=True, capture_output=True, check=False,
     ).stdout
     status: dict[str, str] = {}
@@ -49,17 +50,22 @@ def submodule_status(arena: Path) -> dict[str, str]:
 
 
 def robot_submodules(arena: Path) -> dict[str, list[str]]:
-    """{robot: [paths]} — union of path-prefix under ROBOTS_PREFIX and `robot =` attribute.
+    """{robot: [paths-relative-to-arena]} from the SDK submodule's .gitmodules `robot = <name>` tags.
+    Paths in the SDK's gitmodules are relative to the SDK; we prepend `arena_robots/` for callers.
     `robot =` may list multiple whitespace-separated names (shared upstream dep)."""
+    sdk_gitmodules = arena / _SDK_SUBDIR / ".gitmodules"
+    if not sdk_gitmodules.is_file():
+        return {}
     cfg = configparser.ConfigParser()
-    cfg.read(arena / ".gitmodules")
+    cfg.read(sdk_gitmodules)
     out: dict[str, list[str]] = {}
     for section in cfg.sections():
         if not section.startswith("submodule "):
             continue
-        path = cfg[section].get("path", "").strip()
-        if not path:
+        sub_path = cfg[section].get("path", "").strip()
+        if not sub_path:
             continue
+        path = f"{_SDK_SUBDIR}/{sub_path}"
         robots = cfg[section].get("robot", "").split()
         if not robots:
             rel = path.removeprefix(f"{ROBOTS_PREFIX}/")
@@ -118,15 +124,20 @@ def cmd_add(arena: Path, args) -> int:
         if not paths:
             print(f"robots: '{robot}' has no submodules — nothing to install")
             continue
+        _git(["-c", "protocol.file.allow=always",
+              "submodule", "update", "--init", "--checkout", _SDK_SUBDIR], arena)
+        sdk = arena / _SDK_SUBDIR
         for p in paths:
+            sub_path = Path(p).relative_to(_SDK_SUBDIR).as_posix()
             _git(["-c", "protocol.file.allow=always",
-                  "submodule", "update", "--init", "--checkout", p], arena)
+                  "submodule", "update", "--init", "--checkout", sub_path], sdk)
     return 0
 
 
 def cmd_rm(arena: Path, args) -> int:
     subs = robot_submodules(arena)
     shared = _path_robots(arena)
+    sdk = arena / _SDK_SUBDIR
     for robot in args.names:
         paths = subs.get(robot)
         if not paths:
@@ -139,25 +150,26 @@ def cmd_rm(arena: Path, args) -> int:
                 continue
             if others:
                 print(f"robots: force-removing '{p}' (also pending: {', '.join(sorted(others))})")
-            _git(["submodule", "deinit", "-f", p], arena, check=False)
+            sub_path = Path(p).relative_to(_SDK_SUBDIR).as_posix()
+            _git(["submodule", "deinit", "-f", sub_path], sdk, check=False)
     return 0
 
 
 def cmd_update(arena: Path, _args) -> int:
-    subs = robot_submodules(arena)
-    status = submodule_status(arena)
-    paths = [p for ps in subs.values() for p in ps if status.get(p) == "init"]
-    if not paths:
+    sdk = arena / _SDK_SUBDIR
+    if not (sdk / ".gitmodules").is_file():
         return 0
-    return _git(["submodule", "update", "--recursive", *paths], arena, check=False)
+    return _git(["submodule", "update", "--recursive"], sdk, check=False)
 
 
 def cmd_uninstall(arena: Path, _args) -> int:
     subs = robot_submodules(arena)
     status = submodule_status(arena)
+    sdk = arena / _SDK_SUBDIR
     for p in (p for ps in subs.values() for p in ps):
         if status.get(p) == "init":
-            _git(["submodule", "deinit", "-f", p], arena, check=False)
+            sub_path = Path(p).relative_to(_SDK_SUBDIR).as_posix()
+            _git(["submodule", "deinit", "-f", sub_path], sdk, check=False)
     return 0
 
 

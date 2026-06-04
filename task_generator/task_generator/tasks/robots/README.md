@@ -26,6 +26,19 @@ Parameters live under `task.<mode>.<leaf>`. Mode names are shared across the
 three axes; e.g. `task.scenario.file` is read by both `TM_Robots.scenario` and
 `TM_Obstacles.scenario`, which intentionally load the same scenario file.
 
+## Level selection
+
+`TM_Robots` is level-agnostic: it places robots on the whole compacted map (all loaded
+levels), with start and goal sampled anywhere. Which levels exist is set at load time
+(`world:=name` loads all, `world:=name[0,3]` loads only 0 and 3), not per reset.
+
+Crossing floors is handled below the task mode, in `RobotManager.submit_task`: when a
+`GoToPhase` targets a different level than the robot's current one, it injects
+elevator-boarding subgoals (`WorldManager.elevator_route` BFS over the elevator graph)
+ahead of it. The robot drives into each cabin, the mechanism shim teleports it across,
+and the next leg becomes reachable. No explicit wait phase: the robot simply cannot path
+to the disconnected goal until the teleport, then proceeds.
+
 ## Task modes (`TM_Robots` subclasses)
 
 `TM_Robots` ([`__init__.py`](__init__.py)) is the base: one instance drives

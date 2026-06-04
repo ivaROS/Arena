@@ -1,7 +1,17 @@
-from .World import World, WorldDescription, WorldIdentifier
+from .World import (
+    ElevatorDescriptor,
+    Level,
+    LevelDescription,
+    MultiLevelWorldView,
+    WorldDescription,
+    WorldIdentifier,
+)
 
 __all__ = [
-    'World',
+    'ElevatorDescriptor',
+    'Level',
+    'LevelDescription',
+    'MultiLevelWorldView',
     'WorldDescription',
     'WorldIdentifier',
 ]

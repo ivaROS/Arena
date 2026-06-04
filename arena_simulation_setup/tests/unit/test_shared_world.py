@@ -1,31 +1,33 @@
 from __future__ import annotations
 
-import math
-
 import pytest
-
 from arena_simulation_setup.shared.world import Door, Elevator, Floor
 from arena_simulation_setup.utils.geometry import Position
-
 
 # ---------------------------------------------------------------------------
 # Elevator
 # ---------------------------------------------------------------------------
 
 
-def _elev_pos():
+def _elev_pos() -> Position:
     return Position(0.0, 0.0, 0.0)
 
 
 def test_elevator_default_size():
     e = Elevator(name="elev", position=_elev_pos())
-    assert e.size == pytest.approx([2.0, 2.0, 0.2])
+    assert e.size == pytest.approx([2.0, 2.0, 2.5])
 
 
-def test_elevator_default_height_range():
+def test_elevator_default_door_side():
     e = Elevator(name="elev", position=_elev_pos())
-    assert e.height_min == pytest.approx(0.0)
-    assert e.height_max == pytest.approx(3.0)
+    assert e.door_side == '+x'
+
+
+def test_elevator_default_timings():
+    e = Elevator(name="elev", position=_elev_pos())
+    assert e.transition_time == pytest.approx(1.0)
+    assert e.hold_time == pytest.approx(2.0)
+    assert e.travel_time == pytest.approx(3.0)
 
 
 def test_elevator_material_converter():
@@ -37,6 +39,16 @@ def test_elevator_material_converter():
 def test_elevator_position_converter():
     e = Elevator(name="elev", position=Position(1.0, 2.0, 3.0))
     assert e.position.x == pytest.approx(1.0)
+
+
+def test_elevator_cabin_corners_centered():
+    e = Elevator(name="elev", position=Position(5.0, -3.0, 0.0), size=[4.0, 2.0, 2.5])
+    corners = e.cabin_corners()
+    assert len(corners) == 4
+    xs = sorted({c.x for c in corners})
+    ys = sorted({c.y for c in corners})
+    assert xs == pytest.approx([3.0, 7.0])  # cx +- hw
+    assert ys == pytest.approx([-4.0, -2.0])  # cy +- hh
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +104,38 @@ def test_door_zero_width_corners():
     )
     corners = d.corners
     assert len(corners) == 4
+
+
+def test_door_activation_distance_scalar_broadcast():
+    d = Door(
+        name="door",
+        start=Position(0.0, 0.0, 0.0),
+        end=Position(1.0, 0.0, 0.0),
+        activation_distance=1.5,
+    )
+    assert d.activation_distance == (1.5, 1.5)
+
+
+def test_door_activation_distance_tuple():
+    d = Door(
+        name="door",
+        start=Position(0.0, 0.0, 0.0),
+        end=Position(1.0, 0.0, 0.0),
+        activation_distance=(1.5, 0.0),
+    )
+    assert d.activation_distance == (1.5, 0.0)
+
+
+def test_door_default_kind_and_timings():
+    d = Door(
+        name="door",
+        start=Position(0.0, 0.0, 0.0),
+        end=Position(1.0, 0.0, 0.0),
+    )
+    assert d.kind == 'sliding'
+    assert d.transition_time == pytest.approx(1.0)
+    assert d.hold_time == pytest.approx(2.0)
+    assert d.activation_distance == (3.0, 3.0)
 
 
 # ---------------------------------------------------------------------------

@@ -11,24 +11,51 @@ from arena_simulation_setup.utils.geometry import Position
 from .entities import Named
 
 
+def _activation_distance_converter(x: float | typing.Sequence[float]) -> tuple[float, float]:
+    if isinstance(x, (int, float)):
+        return (float(x), float(x))
+    a, b = x
+    return (float(a), float(b))
+
+
 @attrs.define
 class Elevator(Named):
     position: Position = attrs.field(converter=Position.converter)
-    size: list[float] = attrs.field(factory=lambda: [2.0, 2.0, 0.2])
-    height_min: float = 0.0
-    height_max: float = 3.0
+    size: list[float] = attrs.field(factory=lambda: [2.0, 2.0, 2.5])
+    door_side: typing.Literal['+x', '-x', '+y', '-y'] = '+x'
     material: MaterialIdentifier = attrs.field(converter=MaterialIdentifier.converter, default=Material.default('elevator'))
     destination: str = attrs.field(default="")
+    activation_distance: float = 1.5
+    transition_time: float = 1.0
+    hold_time: float = 2.0
+    travel_time: float = 3.0
+    accept_outside_calls: bool = True
+
+    def cabin_corners(self) -> list[Position]:
+        cx, cy = self.position.x, self.position.y
+        hw, hh = self.size[0] / 2.0, self.size[1] / 2.0
+        return [
+            Position(cx - hw, cy - hh),
+            Position(cx + hw, cy - hh),
+            Position(cx + hw, cy + hh),
+            Position(cx - hw, cy + hh),
+        ]
 
 
 @attrs.define
 class Door(Named):
     start: Position = attrs.field(converter=Position.converter)
     end: Position = attrs.field(converter=Position.converter)
-    kind: typing.Literal['sliding'] = 'sliding'
+    kind: typing.Literal['sliding', 'hinged', 'teleport', 'sliding_top'] = 'sliding'
     width: float = 0.1
     height: float = attrs.field(default=2.0)
     material: MaterialIdentifier = attrs.field(converter=MaterialIdentifier.converter, default=Material.default('door'))
+    activation_distance: tuple[float, float] = attrs.field(
+        converter=_activation_distance_converter,
+        default=(3.0, 3.0),
+    )
+    transition_time: float = 1.0
+    hold_time: float = 2.0
 
     @property
     def corners(self) -> list[Position]:

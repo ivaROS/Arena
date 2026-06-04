@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
-from task_generator.tasks.robots.adapters import ADAPTERS, Adapter
+import geometry_msgs.msg
+
+from task_generator.tasks.robots.adapters import ADAPTERS, Adapter, AdapterDisplayHint
 
 if TYPE_CHECKING:
     from task_generator.manager.robot_manager.robot_manager import RobotManager
@@ -10,9 +12,40 @@ if TYPE_CHECKING:
 
 
 class MobileAdapter(Adapter):
+    cap_displays: ClassVar[tuple[AdapterDisplayHint, ...]] = (
+        AdapterDisplayHint(
+            name="Goal Pose",
+            topic="{ns}/goal_pose",
+            topic_type="geometry_msgs/PoseStamped",
+            rviz_class="rviz_default_plugins/Pose",
+        ),
+        AdapterDisplayHint(
+            name="Plan",
+            topic="{ns}/plan",
+            topic_type="nav_msgs/Path",
+            rviz_class="rviz_default_plugins/Path",
+            topic_must_exist=True,
+        ),
+    )
+
     async def on_reset(self, robot: RobotManager, ctx: ResetContext) -> None:
         if ctx.start_pose is not None:
             await robot.move(ctx.start_pose)
+
+    async def publish_goal_loop(self) -> None:
+        """Republish `<ns>/goal_pose` at 1Hz until the goal object changes. Override to noop if the adapter has its own goal transport."""
+        rm = self.rm
+        target = rm._goal_pos  # noqa: SLF001
+        with rm.node.sim_time_rate(1.0, 60) as (done, rate):
+            while not done.is_set():
+                await rate.get()
+                if rm._goal_pos is not target:  # noqa: SLF001
+                    break
+                msg = geometry_msgs.msg.PoseStamped()
+                msg.header.frame_id = "map"
+                msg.header.stamp = rm.node.sim_time.to_msg()
+                msg.pose = rm._goal_pos.to_msg()  # noqa: SLF001
+                rm._goal_pub.publish(msg)  # noqa: SLF001
 
 
 @ADAPTERS["mobile"].register("nav2")
@@ -41,6 +74,13 @@ def _load_rosnav_rl() -> type[Adapter]:
     from .rosnav_rl import RosnavRlAdapter
 
     return RosnavRlAdapter
+
+
+@ADAPTERS["mobile"].register("drl")
+def _load_drl() -> type[Adapter]:
+    from .drl import DrlAdapter
+
+    return DrlAdapter
 
 
 @ADAPTERS["mobile"].register("none")

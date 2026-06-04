@@ -14,8 +14,13 @@ class BaseHumanSimulator(NodeInterface, abc.ABC):
 ```
 
 Holds a `KnownObstacles` table that tracks every spawned obstacle by name,
-its `spawned` flag, and its `ObstacleLayer`. Public methods delegate to both
-the physics `BaseSim` and the human-sim `_*_impl` methods:
+its `spawned` flag, and its `ObstacleLayer`. On `__init__` it subscribes to
+`<namespace>/arena_peds`, caches ped positions in `_ped_positions_xy`, and
+calls `self._simulator.attach_human_simulator(self)` so the mechanism shim
+(`MechanismITF`, see [sim interface](../../../../arena_runtime/arena_runtime/arena_runtime/sim/README.md))
+can read ground-truth ped positions and dispatch ped teleports through this
+class. Public methods delegate to both the physics `BaseSim` and the
+human-sim `_*_impl` methods:
 
 | Public method | Purpose |
 | --- | --- |
@@ -27,6 +32,17 @@ the physics `BaseSim` and the human-sim `_*_impl` methods:
 | `spawn_robot(robots)` | spawn in physics sim, then call `_spawn_robot_impl` |
 | `remove_robot(robots)` | remove from physics sim, then call `_remove_robot_impl` |
 | `move_robot(robots)` | move in physics sim, then call `_move_robot_impl` |
+
+### `HumanSimulator` Protocol surface
+
+`BaseHumanSimulator` satisfies the Protocol the mechanism shim reads from.
+Inherited defaults work for all current subclasses; override only for
+specialized teleport semantics (e.g. resetting an internal hunav agent list).
+
+| Method | Signature |
+| --- | --- |
+| `pedestrian_positions_xy()` | `() -> Iterable[tuple[str, tuple[float, float]]]` (sync, reads `_ped_positions_xy`) |
+| `pedestrian_teleport(destinations)` | `(Mapping[str, tuple[float, float]]) -> bool` (async, dispatches via `simulator.pedestrian_update`) |
 
 ### Abstract `_impl` methods
 

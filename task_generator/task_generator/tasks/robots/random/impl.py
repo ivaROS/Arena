@@ -19,7 +19,7 @@ class TM_Random(TM_Robots):
                 [
                     PositionRadius(robot_start.position.x, robot_start.position.y, biggest_robot),
                     PositionRadius(robot_goal.position.x, robot_goal.position.y, biggest_robot),
-                ]
+                ],
             )
 
         if len(ROBOT_POSITIONS) < len(self._ctx.robots):

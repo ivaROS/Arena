@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import typing
 
@@ -61,7 +62,6 @@ class RobotManager(NodeInterface):
     _robot: Robot
     _move_base_pub: rclpy.publisher.Publisher
     _goal_pub: rclpy.publisher.Publisher
-    _pub_goal_timer: rclpy.timer.Timer
     _rate_setup: rclpy.timer.Rate
     _config: RobotView
     _adapters: dict[TaskKind, Adapter]
@@ -128,7 +128,6 @@ class RobotManager(NodeInterface):
         self._robot = robot
         self._robot.sim_path = self._environment_manager.realize(robot.name)
         self._robot.extra.setdefault('namespace', self.namespace)
-        self._goal_timer = None
 
         self._publish_goal_task: asyncio.Task | None = None
 
@@ -349,6 +348,21 @@ class RobotManager(NodeInterface):
         if not request.phases:
             raise ValueError(f"TaskRequest has no phases; nothing to dispatch (robot={self.name!r})")
 
+        # Inject elevator-boarding subgoals for goals on a different level than the robot.
+        # The robot drives into the cabin, is teleported across, then the next leg becomes reachable.
+        world_manager = self.node._world_manager
+        current_level = world_manager.level_of_point(self._start_pos.position.x, self._start_pos.position.y)
+        routed_phases = []
+        for phase in request.phases:
+            if isinstance(phase, GoToPhase):
+                goal_level = world_manager.level_of_point(phase.pose.position.x, phase.pose.position.y)
+                if current_level and goal_level and goal_level != current_level:
+                    for elevator_position in world_manager.elevator_route(current_level, goal_level):
+                        routed_phases.append(GoToPhase(pose=Pose(position=elevator_position, orientation=phase.pose.orientation), tolerance_angle=math.pi))
+                    current_level = goal_level
+            routed_phases.append(phase)
+        request = attrs.evolve(request, phases=routed_phases)
+
         realized_phases = [attrs.evolve(phase, pose=self._environment_manager.realize(phase.pose)) if isinstance(phase, GoToPhase) else phase for phase in request.phases]
         request = attrs.evolve(request, phases=realized_phases)
 
@@ -366,18 +380,13 @@ class RobotManager(NodeInterface):
 
         await adapter.dispatch_phase(phase0, self)
 
-        # (Re)start the keep-alive loop that republishes _goal_pos against
-        # nav2/AMCL jitter and (crucially) covers the gap when nav2 isn't
-        # subscribed yet on the first dispatch. Adapters that own their own
-        # goal transport (e.g. action client) opt out via republishes_goal=False
-        # so the loop does not race their dispatch.
-        if adapter.republishes_goal:
-            if self._publish_goal_task is not None:
-                self._publish_goal_task.cancel()
-            self._publish_goal_task = asyncio.create_task(self._publish_goal_loop())
-        elif self._publish_goal_task is not None:
+        from task_generator.tasks.robots.adapters.mobile import MobileAdapter
+
+        if self._publish_goal_task is not None:
             self._publish_goal_task.cancel()
             self._publish_goal_task = None
+        if isinstance(adapter, MobileAdapter):
+            self._publish_goal_task = asyncio.create_task(adapter.publish_goal_loop())
 
         if self._robot.record_data_dir:
             self.node.rosparam[list[float]].set(self.namespace.robot_ns.ParamNamespace()("goal"), [self.goal_pos.position.x, self.goal_pos.position.y, self.goal_pos.orientation.to_yaw()])
@@ -407,41 +416,13 @@ class RobotManager(NodeInterface):
         await asyncio.gather(*(a.on_move(pose, self) for a in self._adapter_instances))
 
     async def move(self, pose: Pose) -> None:
-        """Teleport the robot to ``pose``. Positioning only — no task dispatch."""
+        """Teleport the robot to ``pose``. Positioning only, no task dispatch."""
         self._start_pos = pose
         await self._apply_pose(pose)
 
         if self._robot.record_data_dir:
             realized = self._environment_manager.realize(self._start_pos)
             self.node.rosparam[list[float]].set(self.namespace.robot_ns.ParamNamespace()("start"), [realized.position.x, realized.position.y, realized.orientation.to_yaw()])
-
-    async def _publish_goal_loop(self):
-        # Keeps republishing _goal_pos against amcl jitter until a reset
-        # swaps _goal_pos to a different object. is_done elsewhere handles
-        # completion; this loop only keeps the goal alive.
-
-        target = self._goal_pos
-        with self.node.sim_time_rate(1.0, 60) as (done, rate):
-            while not done.is_set():
-                await rate.get()
-
-                if self._goal_pos is not target:
-                    break
-
-                goal = self._goal_pos
-                self._logger.debug(f"Publishing goal: x={goal.position.x}, y={goal.position.y}, orientation={goal.orientation.to_yaw()}")
-
-                if self._goal_timer is not None:
-                    self._goal_timer.cancel()
-                    self._goal_timer.destroy()
-
-                goal_msg = geometry_msgs.msg.PoseStamped()
-                goal_msg.header.frame_id = "map"
-                goal_msg.header.stamp = self.node.sim_time.to_msg()
-                goal_msg.pose = goal.to_msg()
-                self._goal_pub.publish(goal_msg)
-
-                self._goal_start_time = self.node.sim_time
 
     async def _launch_robot(self, node_paths: set[str]):
         """Launch the robot's navstack via the bound adapters."""
@@ -482,6 +463,7 @@ class RobotManager(NodeInterface):
                 robot_name=self.model_name,
                 frame=self._robot.frame.tf(),
                 task_generator_node=os.path.join(self.node.get_namespace(), self.node.get_name()),
+                env_namespace=self.node.get_namespace(),
                 use_sim_time=True,
                 base_frame=self._config.model_params.base_frame,
                 odom_frame=self._config.model_params.odom_frame,
@@ -522,8 +504,5 @@ class RobotManager(NodeInterface):
         pass
 
     async def destroy(self):
-        if self._goal_timer is not None:
-            self._goal_timer.cancel()
-            self._goal_timer.destroy()
         await self._environment_manager.remove_robot((self.robot,))
         # TODO kill node in navigation stack

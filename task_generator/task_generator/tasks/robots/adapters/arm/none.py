@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     bringup=NoneArmBringup,
     client=ReachPoseClient,
     cap="arm",
-    republishes_goal=True,
 )
 class NoneArmAdapter(Adapter):
     kind: ClassVar[str] = "none"
