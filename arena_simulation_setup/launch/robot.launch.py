@@ -48,8 +48,11 @@ def generate_launch_description():
         package='arena_evaluation',
         executable='record',
         name=PythonExpression(['"data_recorder" + "', namespace.substitution, '".replace("/","_")']),
+        # Pass --dir as two argv tokens; a nested list was not reliably
+        # reaching argparse, so benchmark recorder output fell back to auto:/.
         arguments=[
-            ['--dir', ' ', record_data_dir.substitution],
+            '--dir',
+            record_data_dir.substitution,
         ],
         condition=launch.conditions.IfCondition(PythonExpression(['bool("', record_data_dir.substitution, '")'])),
     )
