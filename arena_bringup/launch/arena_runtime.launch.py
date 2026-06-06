@@ -6,7 +6,7 @@ from arena_bringup.substitutions import LaunchArgument
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
-_RUNTIME_OWNED = frozenset({'log_level', 'sim', 'use_sim_time', 'world', 'headless'})
+_RUNTIME_OWNED = frozenset({'log_level', 'sim', 'use_sim_time', 'world', 'headless', 'slot_buffer'})
 
 
 def generate_launch_description():
@@ -37,6 +37,12 @@ def generate_launch_description():
     headless = LaunchArgument(
         name='headless',
         default_value='False',
+    )
+
+    slot_buffer = LaunchArgument(
+        name='slot_buffer',
+        default_value='5.0',
+        description='Runtime env packing buffer in metres. Use 0 for literal world coordinates.',
     )
 
     launch_sim = launch.actions.IncludeLaunchDescription(
@@ -72,7 +78,11 @@ def generate_launch_description():
                 name='arena',
                 namespace='',
                 output='screen',
-                parameters=[{'sim': sim.substitution, 'env_args': env_args}],
+                parameters=[{
+                    'sim': sim.substitution,
+                    'env_args': env_args,
+                    'slot_buffer': slot_buffer.substitution,
+                }],
             ),
         ]
 
