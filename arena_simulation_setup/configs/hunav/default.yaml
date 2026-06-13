@@ -1,7 +1,7 @@
 id: 1
 group_id: -1
 skin: 0
-max_vel: 0.8
+max_vel: 1.2  # realistic walking speed (was 0.8); node-level cap in task_generator.yaml
 radius: 0.3
 goal_radius: 2.0
 cyclic_goals: true
