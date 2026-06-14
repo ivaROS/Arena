@@ -84,6 +84,15 @@ class CollisionTrackerNode(rclpy.node.Node):
             self._on_peds,
             10,
         )
+        env_peds_topic = str(robot_manager._namespace('arena_peds'))  # pylint: disable=protected-access
+        self._sub_env_peds = None
+        if env_peds_topic != str(robot_manager.namespace('arena_peds')):
+            self._sub_env_peds = self.create_subscription(
+                arena_people_msgs.msg.Pedestrians,
+                env_peds_topic,
+                self._on_peds,
+                10,
+            )
         self._timer = self.create_timer(1.0 / rate_hz, self._tick)
 
     def _on_peds(self, msg: arena_people_msgs.msg.Pedestrians):
@@ -145,6 +154,28 @@ class CollisionTrackerNode(rclpy.node.Node):
                     ev.polygon_name = name
                     ev.distance = 0.0
                     ev.obstacle_position = geometry_msgs.msg.Point(x=px, y=py, z=0.0)
+                    events.append(ev)
+                    polygons_hit[name] = entry['action_code']
+
+            robots_manager = getattr(self._rm.node, 'robots_manager', None)
+            if robots_manager is not None:
+                for other_name, other in robots_manager.managers.items():
+                    if other is self._rm:
+                        continue
+                    other_pose = other.pose
+                    if other_pose is None:
+                        continue
+                    ox, oy, _ = other_pose.to_2d()
+                    if math.isnan(ox) or math.isnan(oy):
+                        continue
+                    other_disc = shapely.Point(ox, oy).buffer(max(other.radius, 0.01))
+                    if not robot_poly.intersects(other_disc):
+                        continue
+                    ev = arena_robots_msgs.msg.CollisionEvent()
+                    ev.obstacle_id = f'<robot:{other_name}>'
+                    ev.polygon_name = name
+                    ev.distance = 0.0
+                    ev.obstacle_position = geometry_msgs.msg.Point(x=ox, y=oy, z=0.0)
                     events.append(ev)
                     polygons_hit[name] = entry['action_code']
 

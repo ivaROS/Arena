@@ -95,3 +95,10 @@ def _load_test_collision() -> type[Adapter]:
     from .test_collision import TestCollisionAdapter
 
     return TestCollisionAdapter
+
+
+@ADAPTERS["mobile"].register("collision-benchmark")
+def _load_collision_benchmark() -> type[Adapter]:
+    from .collision_benchmark import CollisionBenchmarkAdapter
+
+    return CollisionBenchmarkAdapter
