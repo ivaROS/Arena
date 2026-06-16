@@ -25,6 +25,7 @@ _ACTION_CODES: dict[str | None, int] = {
     'approach': 3,
     'limit': 4,
 }
+_STOP_ACTION = _ACTION_CODES['stop']
 
 
 class CollisionTrackerNode(rclpy.node.Node):
@@ -78,21 +79,21 @@ class CollisionTrackerNode(rclpy.node.Node):
 
         self._pub_state = self.create_publisher(nav2_msgs.msg.CollisionMonitorState, 'collision_monitor_state', 10)
         self._pub_events = self.create_publisher(arena_robots_msgs.msg.CollisionEvents, 'collision_events', 10)
-        self._sub_peds = self.create_subscription(
-            arena_people_msgs.msg.Pedestrians,
-            str(robot_manager.namespace('arena_peds')),
-            self._on_peds,
-            10,
-        )
-        env_peds_topic = str(robot_manager._namespace('arena_peds'))  # pylint: disable=protected-access
-        self._sub_env_peds = None
-        if env_peds_topic != str(robot_manager.namespace('arena_peds')):
-            self._sub_env_peds = self.create_subscription(
+        peds_topics = [str(robot_manager.namespace('arena_peds'))]
+        robot_ns = str(robot_manager.namespace).rstrip('/')
+        if '/' in robot_ns:
+            shared_peds_topic = f"{robot_ns.rsplit('/', 1)[0]}/arena_peds"
+            if shared_peds_topic not in peds_topics:
+                peds_topics.append(shared_peds_topic)
+        self._sub_peds = [
+            self.create_subscription(
                 arena_people_msgs.msg.Pedestrians,
-                env_peds_topic,
+                topic,
                 self._on_peds,
                 10,
             )
+            for topic in peds_topics
+        ]
         self._timer = self.create_timer(1.0 / rate_hz, self._tick)
 
     def _on_peds(self, msg: arena_people_msgs.msg.Pedestrians):
@@ -119,26 +120,29 @@ class CollisionTrackerNode(rclpy.node.Node):
 
         for name, entry in self._poly_cache.items():
             robot_poly = self._robot_polygon(entry, rx, ry, rth)
+            emits_collision_event = entry['action_code'] == _STOP_ACTION
 
             if not walls.is_empty and robot_poly.intersects(walls):
-                ev = arena_robots_msgs.msg.CollisionEvent()
-                ev.obstacle_id = '<wall>'
-                ev.polygon_name = name
-                ev.distance = 0.0
-                ev.obstacle_position = geometry_msgs.msg.Point(x=rx, y=ry, z=0.0)
-                events.append(ev)
+                if emits_collision_event:
+                    ev = arena_robots_msgs.msg.CollisionEvent()
+                    ev.obstacle_id = '<wall>'
+                    ev.polygon_name = name
+                    ev.distance = 0.0
+                    ev.obstacle_position = geometry_msgs.msg.Point(x=rx, y=ry, z=0.0)
+                    events.append(ev)
                 polygons_hit[name] = entry['action_code']
 
             for obs_name, poly in statics.items():
                 if not robot_poly.intersects(poly):
                     continue
                 centroid = poly.centroid
-                ev = arena_robots_msgs.msg.CollisionEvent()
-                ev.obstacle_id = obs_name
-                ev.polygon_name = name
-                ev.distance = 0.0
-                ev.obstacle_position = geometry_msgs.msg.Point(x=float(centroid.x), y=float(centroid.y), z=0.0)
-                events.append(ev)
+                if emits_collision_event:
+                    ev = arena_robots_msgs.msg.CollisionEvent()
+                    ev.obstacle_id = obs_name
+                    ev.polygon_name = name
+                    ev.distance = 0.0
+                    ev.obstacle_position = geometry_msgs.msg.Point(x=float(centroid.x), y=float(centroid.y), z=0.0)
+                    events.append(ev)
                 polygons_hit[name] = entry['action_code']
 
             if self._peds_msg is not None:
@@ -149,35 +153,34 @@ class CollisionTrackerNode(rclpy.node.Node):
                     ped_disc = shapely.Point(px, py).buffer(self._default_peds_radius)
                     if not robot_poly.intersects(ped_disc):
                         continue
-                    ev = arena_robots_msgs.msg.CollisionEvent()
-                    ev.obstacle_id = p.name
-                    ev.polygon_name = name
-                    ev.distance = 0.0
-                    ev.obstacle_position = geometry_msgs.msg.Point(x=px, y=py, z=0.0)
-                    events.append(ev)
+                    if emits_collision_event:
+                        ev = arena_robots_msgs.msg.CollisionEvent()
+                        ev.obstacle_id = p.name
+                        ev.polygon_name = name
+                        ev.distance = 0.0
+                        ev.obstacle_position = geometry_msgs.msg.Point(x=px, y=py, z=0.0)
+                        events.append(ev)
                     polygons_hit[name] = entry['action_code']
 
-            robots_manager = getattr(self._rm.node, 'robots_manager', None)
-            if robots_manager is not None:
-                for other_name, other in robots_manager.managers.items():
-                    if other is self._rm:
-                        continue
-                    other_pose = other.pose
-                    if other_pose is None:
-                        continue
-                    ox, oy, _ = other_pose.to_2d()
-                    if math.isnan(ox) or math.isnan(oy):
-                        continue
-                    other_disc = shapely.Point(ox, oy).buffer(max(other.radius, 0.01))
-                    if not robot_poly.intersects(other_disc):
-                        continue
+            managers = getattr(getattr(self._rm.node, '_robots_manager', None), 'managers', {})
+            for other_name, other in managers.items():
+                if other is self._rm:
+                    continue
+                other_pose = other.pose
+                if other_pose is None:
+                    continue
+                ox, oy, _ = other_pose.to_2d()
+                other_disc = shapely.Point(ox, oy).buffer(other.radius)
+                if not robot_poly.intersects(other_disc):
+                    continue
+                if emits_collision_event:
                     ev = arena_robots_msgs.msg.CollisionEvent()
                     ev.obstacle_id = f'<robot:{other_name}>'
                     ev.polygon_name = name
                     ev.distance = 0.0
                     ev.obstacle_position = geometry_msgs.msg.Point(x=ox, y=oy, z=0.0)
                     events.append(ev)
-                    polygons_hit[name] = entry['action_code']
+                polygons_hit[name] = entry['action_code']
 
         state = nav2_msgs.msg.CollisionMonitorState()
         if polygons_hit:

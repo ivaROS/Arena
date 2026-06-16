@@ -1,0 +1,75 @@
+{
+    "robots": [
+        {
+            "start": [5, 11, 0.7],
+            "goal": [17.4, 11, 0.0]
+        }
+    ],
+    "static": [
+        {
+            "name": "wall_0",
+            "model": "wall",
+            "pos": [8, 9, 0]
+        },
+        {
+            "name": "wall_1",
+            "model": "wall",
+            "pos": [8, 13, 0]
+        },
+        {
+            "name": "wall_2",
+            "model": "wall",
+            "pos": [14, 9, 0]
+        },
+        {
+            "name": "wall_3",
+            "model": "wall",
+            "pos": [14, 13, 0]
+        },
+        {
+            "name": "wall_4",
+            "model": "wall",
+            "pos": [17.8, 9.5, 1.5708]
+        },
+        {
+            "name": "wall_5",
+            "model": "wall",
+            "pos": [4.2, 12.5, 1.5708]
+        }
+    ],
+    "dynamic": [
+        {
+            "name": "person_0",
+            "id": 0,
+            "pos": [7.0, 10, 0.0],
+            "type": "adult",
+            "model": "arenian",
+            "waypoints": [
+                [13.0, 11.0],
+                [8.0, 10.4]
+            ]
+        },
+        {
+            "name": "person_1",
+            "id": 1,
+            "pos": [16.1, 9.1, 0.0],
+            "type": "adult",
+            "model": "arenian",
+            "waypoints": [
+                [12.5, 13.2],
+                [16.0, 9.1]
+            ]
+        },
+        {
+            "name": "person_2",
+            "id": 2,
+            "pos": [12.1, 12.1, 0.0],
+            "type": "adult",
+            "model": "arenian",
+            "waypoints": [
+                [4.2, 14.0],
+                [12.2, 11.0]
+            ]
+        }
+    ]
+}

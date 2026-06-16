@@ -1,0 +1,19 @@
+{
+  "robots": [
+    { "start": [8.0, 12.0, 0.0], "goal": [28.0, 12.0, 0.0] }
+  ],
+  "static": [],
+  "dynamic": [
+    {
+      "name": "crosser",
+      "pos": [18.0, 9.0, 1.5708],
+      "type": "adult",
+      "model": "arenian",
+      "waypoints": [
+        [18.0, 9.0, 0.0],
+        [18.0, 15.0, 0.0]
+      ],
+      "waypoint_mode": 1
+    }
+  ]
+}

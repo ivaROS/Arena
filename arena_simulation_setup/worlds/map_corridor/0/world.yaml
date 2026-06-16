@@ -1,0 +1,57 @@
+zones:
+- name: corridor
+  description: Corridor
+  material:
+  - Common/Material/Porcelain_Tile_4
+  - {}
+  corners:
+  - x: 0.0
+    y: 6.0
+    z: 0.0
+  - x: 40.0
+    y: 6.0
+    z: 0.0
+  - x: 40.0
+    y: 13.0
+    z: 0.0
+  - x: 0.0
+    y: 13.0
+    z: 0.0
+  walls:
+  - start:
+      x: 0.0
+      y: 6.0
+      z: 0.0
+    end:
+      x: 40.0
+      y: 6.0
+      z: 0.0
+  - start:
+      x: 40.0
+      y: 6.0
+      z: 0.0
+    end:
+      x: 40.0
+      y: 13.0
+      z: 0.0
+  - start:
+      x: 40.0
+      y: 13.0
+      z: 0.0
+    end:
+      x: 0.0
+      y: 13.0
+      z: 0.0
+  - start:
+      x: 0.0
+      y: 13.0
+      z: 0.0
+    end:
+      x: 0.0
+      y: 6.0
+      z: 0.0
+  doors: []
+  elevators: []
+  entities:
+    static: []
+    dynamic: []
