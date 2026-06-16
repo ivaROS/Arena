@@ -197,6 +197,14 @@ Swap `mobile.planner:=sicnav` / `crowdnav` for the others. Set
 implement the `step()` contract — see
 [arena_planners/planners/README.md](arena_planners/planners/README.md).
 
+**SICNav + HSL/MA57 (optional, faster multi-human MPC).** SICNav runs out of the
+box on IPOPT's default MUMPS solver (limited to ~3 humans). For real crowds
+(5 humans) install the HSL/MA57 linear solver — it's free for academics but
+licensed per user, so it can't be shipped with the repo. Each collaborator obtains
+their own licence and runs the provided installer; full step-by-step instructions
+(licence application → download → build → wire-in) are in
+[arena_planners/planners/sicnav/README.md](arena_planners/planners/sicnav/README.md#installing-hslma57).
+
 ---
 
 ## Training (rosnav_rl)

@@ -5,7 +5,7 @@
         file: default.xml
       random:
         dynamic:
-          n: [0, 0]
+          n: [1, 5]
           models:
           - arenian
         interactive:
@@ -23,10 +23,17 @@
         index: 0
       environment:
         file: office.yaml
-    hunavsim:       
+    hunavsim:
       parameters:
-        max_vel: 0.3
+        # Realistic walking speed (was 0.3 -> peds crawled ~0.1 m/s under social
+        # forces; real walking is 1.0-1.5). Caps the per-agent max_vel below.
+        max_vel: 1.2
         force_factor_desired: 1.0
         force_factor_obstacle: 1.0
         force_factor_social: 5.0
-        force_factor_robot: 0.0
+        # Was 0.0 -> pedestrians ignored the robot entirely (never yielded), which
+        # left SICNav-np expecting reciprocal ORCA avoidance that never came and
+        # stalling in front of people. Match force_factor_social so humans treat
+        # the robot like another pedestrian. Set back to 0.0 to stress-test
+        # avoidance against fully non-cooperative humans.
+        force_factor_robot: 5.0

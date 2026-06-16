@@ -25,6 +25,12 @@ repositories:
     type: git
     url: https://github.com/voshch/ament_cmake_venv
     version: humble
+  # arena_models@master still does find_package(ament_cmake_venv_pyenv REQUIRED),
+  # so this must be vendored even though the venv backend moved to _uv (commit 4a27f75).
+  deps/ament_cmake_venv_pyenv:
+    type: git
+    url: https://github.com/voshch/ament_cmake_venv_pyenv
+    version: master
   deps/ament_cmake_venv_uv:
     type: git
     url: https://github.com/voshch/ament_cmake_venv_uv

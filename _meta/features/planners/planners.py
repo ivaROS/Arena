@@ -175,6 +175,8 @@ def _fetch_weights(planner_dir: Path) -> None:
     manifest = planner_dir / "weights.yaml"
     if not manifest.is_file():
         return
+    import shutil
+
     import yaml
     from huggingface_hub import hf_hub_download
     with open(manifest) as f:
@@ -183,14 +185,21 @@ def _fetch_weights(planner_dir: Path) -> None:
         repo = entry["repo"]
         filename = entry["filename"]
         dest = planner_dir / entry["dest"]
-        if dest.is_file():
+        # Skip only if dest is already a real (non-symlink) file. A symlink — even
+        # one that currently resolves — is replaced with a real copy, because the
+        # HF cache it points into is ephemeral (wiped on container rebuild), which
+        # leaves a dangling link and crashes the planner at model-load time.
+        if dest.is_file() and not dest.is_symlink():
             continue
         cached = hf_hub_download(repo_id=repo, filename=filename)
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.is_symlink() or dest.exists():
             dest.unlink()
-        dest.symlink_to(cached)
-        print(f"planners: {repo}/{filename} -> {dest.relative_to(planner_dir)}")
+        # Copy (don't symlink) into the host-mounted source tree so the weights
+        # survive container rebuilds. dest/ is gitignored, so this never gets
+        # committed; HuggingFace remains the source of truth for collaborators.
+        shutil.copy2(cached, dest)
+        print(f"planners: {repo}/{filename} -> {dest.relative_to(planner_dir)} (copied)")
 
 
 def cmd_rm(arena: Path, args) -> int:
