@@ -105,3 +105,11 @@ repositories:
   deps/arena_text_crowd:
     type: git
     url: https://github.com/ductaingn/arena_text_crowd.git
+
+  # planners (custom nav2 controller plugins, not in nav2 apt)
+  # Dynamic Gap: gap-based local planner ported from ivaROS/DynamicGap (ROS 1).
+  # Run with `mobile.local_planner:=dynamicgap`; config lives in arena_robots.
+  dynamic_gap:
+    type: git
+    url: https://github.com/noir-kalakaar/dynamic_gap.git
+    version: main
