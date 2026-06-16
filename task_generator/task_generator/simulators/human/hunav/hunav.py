@@ -292,6 +292,10 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
 
     async def _spawn_dynamic_obstacles_impl(self, obstacles: Sequence[DynamicObstacle]) -> Sequence[DynamicObstacle | None]:
         async with self._agents_lock:
+            self._logger.info(
+                f"registering {len(obstacles)} dynamic obstacle(s) with Hunav: "
+                f"{[obstacle.name for obstacle in obstacles]}"
+            )
             results: list[DynamicObstacle | None] = []
             new_agent_msgs: list = []
 
@@ -310,6 +314,12 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
 
                     arena_pedestrian = self._create_arena_pedestrian(hunav_obstacle, unique_id)
                     self._arena_pedestrians_container.pedestrians.append(arena_pedestrian)  # type: ignore
+                    self._logger.info(
+                        f"registered Hunav pedestrian {arena_pedestrian.name} "
+                        f"id={arena_pedestrian.id} at "
+                        f"({arena_pedestrian.pose.position.x:.2f}, "
+                        f"{arena_pedestrian.pose.position.y:.2f})"
+                    )
 
                     self._pedestrians[agent_msg.id] = {
                         "last_update": time.time(),
