@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 import geometry_msgs.msg
 
+from task_generator.manager.robot_manager.collision_tracker import CollisionTrackerNode
 from task_generator.tasks.robots.adapters import ADAPTERS, Adapter, AdapterDisplayHint
 
 if TYPE_CHECKING:
@@ -27,6 +28,14 @@ class MobileAdapter(Adapter):
             topic_must_exist=True,
         ),
     )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self._collision_tracker: CollisionTrackerNode | None = None
+        polys = self.rm.robot.model.resolve_sync().caps.mobile.polygons_dict
+        if polys:
+            self._collision_tracker = CollisionTrackerNode(self.rm, polys)
+            self.rm.node.executor.add_node(self._collision_tracker)
 
     async def on_reset(self, robot: RobotManager, ctx: ResetContext) -> None:
         if ctx.start_pose is not None:
