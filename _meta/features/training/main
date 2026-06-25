@@ -8,6 +8,17 @@ update(){
     git submodule update --init --rebase --depth 1 arena_training
     pushd "$ARENA_DIR/arena_training" > /dev/null || return 1
         git submodule update --init --rebase --depth 1 deps/rosnav_rl
+        # Override rosnav_rl with the ivaROS fork branch, which carries a fix not in
+        # upstream Arena-Rosnav/rosnav-rl: holonomic robots' ROBOT_DEFINED discrete
+        # action space (resolve_discretization/decode). Needed for discrete-action
+        # training of holonomic robots (e.g. dingo_omni); continuous training works
+        # without it. Non-fatal so a transient fetch failure doesn't abort the install.
+        {
+            git -C deps/rosnav_rl remote get-url ivaros >/dev/null 2>&1 \
+                || git -C deps/rosnav_rl remote add ivaros https://github.com/ivaROS/rosnav-rl
+            git -C deps/rosnav_rl fetch --quiet ivaros jazzy \
+                && git -C deps/rosnav_rl checkout --quiet FETCH_HEAD
+        } || echo "[training] WARNING: could not apply ivaROS rosnav-rl holonomic fix (offline?); discrete-action holonomic training may error."
         uv pip install --python "$ARENA_DIR/.venv/bin/python" \
             -e "." \
             -e "./deps/rosnav_rl/rosnav_rl"
