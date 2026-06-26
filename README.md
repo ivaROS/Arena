@@ -6,7 +6,7 @@ A modular ROS 2 (Jazzy) platform for researching and benchmarking autonomous rob
 navigation in 2D and 3D simulated environments. It supports:
 
 - **Simulators** — Gazebo, Isaac Sim (and a physics-free `dummy` for ROS-graph testing).
-- **Classical planners** — Nav2 (DWB, TEB, MPPI, …).
+- **Classical planners** — Nav2 (DWB, MPPI, …).
 - **Trainable deep-RL** — [rosnav_rl](https://github.com/Arena-Rosnav/rosnav-rl) (PPO/SAC/TD3, DreamerV3).
 - **External research planners** — DRL-VO, CrowdNav, SICNav, … via the [arena_planners](arena_planners/README.md) bridge.
 - **Crowds** — HuNavSim pedestrians; plus **benchmarking** and **evaluation** tooling.
@@ -125,9 +125,9 @@ A launch is composed from cap-scoped arguments. The most useful ones:
 Examples:
 
 ```sh
-# Gazebo + jackal + Nav2 (TEB local planner) + a pedestrian crowd
+# Gazebo + jackal + Nav2 (MPPI local planner) + a pedestrian crowd
 arena launch sim:=gazebo world:=map_empty robot:=jackal \
-    mobile:=nav2 mobile.local_planner:=teb \
+    mobile:=nav2 mobile.local_planner:=mppi \
     tm_robots:=explore tm_obstacles:=random human:=hunav
 
 # Isaac Sim
@@ -173,11 +173,11 @@ Arena exposes three kinds of navigation stack via `mobile:=`:
 
 ### 1. Classical — `mobile:=nav2`
 
-The Nav2 stack. Pick the local planner with `mobile.local_planner:=` (`dwb`, `teb`,
-`mppi`, `rotation_shim`, `graceful`, `regulated_pure_pursuit`, `dynamicgap`).
+The Nav2 stack. Pick the local planner with `mobile.local_planner:=` (`dwb`, `mppi`,
+`rotation_shim`, `graceful`, `regulated_pure_pursuit`, `dynamicgap`).
 
 ```sh
-arena launch sim:=gazebo robot:=jackal mobile:=nav2 mobile.local_planner:=teb
+arena launch sim:=gazebo robot:=jackal mobile:=nav2 mobile.local_planner:=mppi
 ```
 
 **Dynamic Gap** (`mobile.local_planner:=dynamicgap`) is a gap-based crowd-navigation
@@ -293,7 +293,7 @@ arena benchmark sim:=gazebo headless:=true suite:=basic contest:=basic
 - Resume an interrupted run: `arena benchmark --resume <run_id>`.
 
 Contestant args use the same `mobile:=…` / `mobile.<key>:=…` shapes as launch, so you
-can pit any planners against each other (e.g. `nav2`+teb vs `drl`+sicnav vs a trained
+can pit any planners against each other (e.g. `nav2`+mppi vs `drl`+sicnav vs a trained
 `rosnav_rl` agent). Suites/contestants are configured in
 [arena_evaluation/.../configs/benchmark/](arena_evaluation/arena_evaluation/configs/benchmark/README.md).
 
