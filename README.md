@@ -114,7 +114,7 @@ A launch is composed from cap-scoped arguments. The most useful ones:
 |---|---|---|
 | `sim:=` | `gazebo`, `isaac`, `dummy` | Simulator backend (`dummy` = no physics, ROS graph only). |
 | `world:=` | `map_empty`, `hospital_1`, … | World/map from `arena_simulation_setup`. |
-| `robot:=` | `jackal`, `turtlebot4`, … | Robot model. Run `arena feature robots add <name>` once before first use. |
+| `robot:=` | `jackal`, `turtlebot4`, `dingo_omni`, … | Robot model. Run `arena feature robots add <name>` once before first use (self-contained robots like `dingo_omni` need no add). |
 | `mobile:=` | `nav2`, `rosnav_rl`, `drl`, `manual` | Which navigation stack drives the robot (see [Planners](#planners)). |
 | `tm_robots:=` | `explore`, `random`, `scenario` | Robot task mode — `explore` = continuous random goals. |
 | `tm_obstacles:=` | `random`, `scenario`, … | Obstacle / pedestrian placement mode. |
@@ -141,6 +141,30 @@ To discover the keys a cap accepts, read
 `arena_robots/.../robots/<name>/caps/<cap>.yaml` — every top-level key is overridable
 as `mobile.<key>:=<val>`. Full argument reference: [arena_bringup/BRINGUP.md](arena_bringup/BRINGUP.md).
 
+### Holonomic robots
+
+Most Arena robots are diff-drive. **`dingo_omni`** (Clearpath Dingo-Omni) is a holonomic
+(mecanum) base that can strafe sideways. It is self-contained — **no `arena feature robots
+add` needed** — and works out of the box:
+
+```sh
+# teleop / simulate
+arena launch sim:=gazebo world:=map_empty robot:=dingo_omni
+
+# navigate with the holonomic Dynamic Gap controller (auto-strafes — see Planners)
+arena launch sim:=gazebo world:=map_empty robot:=dingo_omni \
+    mobile:=nav2 mobile.local_planner:=dynamicgap \
+    tm_robots:=explore tm_obstacles:=random human:=hunav
+```
+
+Its `caps/mobile.yaml` sets `is_holonomic: true`, so the `cmd_vel` publisher emits
+`linear.y` (strafe), DRL training builds an `OmnidirectionalActionSpace` `[vx, vy, wz]`,
+and holonomic-aware planners command 2-D `(vx, vy)` velocities. Continuous `[vx, vy, wz]`
+training and nav work as-is; **discrete-action** holonomic training additionally needs the
+lab rosnav-rl fix applied by `arena feature training install`. Full details (drive design,
+limitations, discrete-action caveats):
+[arena_robots/.../robots/dingo_omni/README.md](arena_robots/arena_robots/robots/dingo_omni/README.md).
+
 ---
 
 ## Planners
@@ -150,10 +174,23 @@ Arena exposes three kinds of navigation stack via `mobile:=`:
 ### 1. Classical — `mobile:=nav2`
 
 The Nav2 stack. Pick the local planner with `mobile.local_planner:=` (`dwb`, `teb`,
-`mppi`, `rotation_shim`, `graceful`, `regulated_pure_pursuit`).
+`mppi`, `rotation_shim`, `graceful`, `regulated_pure_pursuit`, `dynamicgap`).
 
 ```sh
 arena launch sim:=gazebo robot:=jackal mobile:=nav2 mobile.local_planner:=teb
+```
+
+**Dynamic Gap** (`mobile.local_planner:=dynamicgap`) is a gap-based crowd-navigation
+controller (nav2 `dynamic_gap::DynamicGapController`). Unlike the geometric local planners
+it consumes the HuNavSim pedestrian stream (`../arena_peds`) and the laser scan, and it
+auto-enables holonomic (strafing) gap-following when run on a holonomic base such as
+[`dingo_omni`](#holonomic-robots) (`holonomic` binds to the robot's `is_holonomic`). Run it
+against a crowd:
+
+```sh
+arena launch sim:=gazebo world:=map_empty robot:=jackal \
+    mobile:=nav2 mobile.local_planner:=dynamicgap \
+    tm_robots:=explore tm_obstacles:=random human:=hunav
 ```
 
 ### 2. Trainable deep-RL — `mobile:=rosnav_rl`
