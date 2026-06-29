@@ -1,0 +1,29 @@
+{
+  "robots": [
+    {
+      "start": [5.0, 10.0, 0.0],
+      "phases": [
+        {"goto": [12.0, 10.0, 0.0]}
+      ]
+    }
+  ],
+  "static": [],
+  "dynamic": [
+    {
+      "name": "ped_blocker",
+      "pose": [8.0, 10.0, 0.0],
+      "type": "adult",
+      "model": "arenian",
+      "velocity": 0.0,
+      "desired_velocity": 0.0,
+      "linear_vel": 0.0,
+      "angular_vel": 0.0,
+      "cyclic_goals": false,
+      "goal_radius": 0.0,
+      "waypoints": [
+        [8.0, 10.0, 0.0]
+      ]
+    }
+  ],
+  "interactive": []
+}

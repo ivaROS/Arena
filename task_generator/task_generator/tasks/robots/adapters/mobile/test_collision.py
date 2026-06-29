@@ -13,7 +13,6 @@ from arena_robots.bringup.mobile.test_collision import TestCollisionBringup
 from arena_robots.clients.goto_pose import GotoPoseClient
 from arena_robots.task_kinds import TaskKind
 
-from task_generator.manager.robot_manager.collision_tracker import CollisionTrackerNode
 from task_generator.manager.world_manager.shims import requires_map_server
 from task_generator.tasks.robots.adapters import AdapterMeta
 from task_generator.tasks.robots.adapters.mobile import MobileAdapter
@@ -32,15 +31,6 @@ if TYPE_CHECKING:
 @requires_map_server
 class TestCollisionAdapter(MobileAdapter):
     kind: ClassVar[str] = "test-collision"
-
-    def __init__(self, *args: object, **kwargs: object):
-        super().__init__(*args, **kwargs)
-        self._collision: CollisionTrackerNode | None = None
-        polys = self.rm.robot.model.resolve_sync().caps.mobile.polygons_dict
-        if not polys:
-            return
-        self._collision = CollisionTrackerNode(self.rm, polys)
-        self.rm.node.executor.add_node(self._collision)
 
     def is_phase_done(self, phase: TaskPhase, robot: RobotManager) -> bool | None:
         return True
