@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
 from arena_robots.bringup.mobile.collision_benchmark import CollisionBenchmarkBringup
 from arena_robots.clients.goto_pose import GotoPoseClient
 from arena_robots.task_kinds import TaskKind
 
-from task_generator.manager.robot_manager.collision_tracker import CollisionTrackerNode
 from task_generator.manager.world_manager.shims import requires_map_server
 from task_generator.tasks.robots.adapters import AdapterMeta, ResetContext
 from task_generator.tasks.robots.adapters.mobile import MobileAdapter
@@ -37,22 +35,14 @@ class CollisionBenchmarkAdapter(MobileAdapter):
         rate_hz: float = 10.0,
         **kwargs: object,
     ):
+        # linear_x / rate_hz are forwarded to CollisionBenchmarkBringup via the
+        # base adapter's bringup kwargs; the collision tracker is created once by
+        # MobileAdapter.__init__ (self._collision_tracker).
         super().__init__(*args, duration_s=duration_s, linear_x=linear_x, rate_hz=rate_hz, **kwargs)
         self._duration_s = float(duration_s)
-        self._linear_x = float(linear_x)
-        self._rate_hz = float(rate_hz)
         self._episode_start_s: float | None = None
-        self._drive_task: asyncio.Task | None = None
-        self._collision: CollisionTrackerNode | None = None
-        polys = self.rm.robot.model.resolve_sync().caps.mobile.polygons_dict
-        if polys:
-            self._collision = CollisionTrackerNode(self.rm, polys)
-            self.rm.node.executor.add_node(self._collision)
 
     async def on_reset(self, robot: RobotManager, ctx: ResetContext) -> None:
-        if self._drive_task is not None:
-            self._drive_task.cancel()
-            self._drive_task = None
         await super().on_reset(robot, ctx)
         self._episode_start_s = robot.node.sim_time.to_seconds()
 
