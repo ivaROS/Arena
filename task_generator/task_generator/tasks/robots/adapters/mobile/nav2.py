@@ -60,6 +60,95 @@ if TYPE_CHECKING:
             rviz_class="rviz_default_plugins/Polygon",
             config_json='{"Alpha": 1.0}',
         ),
+        # --- Dynamic Gap debug visualizations ---
+        # The dynamic_gap controller (mobile.local_planner:=dynamicgap) publishes these
+        # marker topics relative to the controller_server node (i.e. under the robot
+        # namespace). topic_must_exist is False on purpose: these are LIFECYCLE publishers
+        # created when the controller activates, which can happen AFTER the rviz config is
+        # generated (the generator only snapshots currently-advertised topics). Gating on
+        # existence therefore raced and silently dropped the whole gap visualizer on robots
+        # whose nav2 stack activates late (observed on dingo_omni). So we always add the
+        # displays; they show "no messages" until the topics come up, and appear (harmlessly
+        # empty) under non-dgap controllers (dwb, mppi, ...).
+        AdapterDisplayHint(
+            name="DGap: raw gaps",
+            topic="{ns}/raw_gaps",
+            topic_type="visualization_msgs/Marker",
+            rviz_class="rviz_default_plugins/Marker",
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: simplified gaps",
+            topic="{ns}/simp_gaps",
+            topic_type="visualization_msgs/Marker",
+            rviz_class="rviz_default_plugins/Marker",
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: gap tubes",
+            topic="{ns}/gap_tubes",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            topic_must_exist=False,
+        ),
+        # Kalman-estimated gap-model positions/velocities: the dynamic estimate that
+        # actually drives moving-obstacle avoidance. "manip" = the manipulated models the
+        # planner ultimately plans against; "raw" = pre-manipulation (off by default).
+        AdapterDisplayHint(
+            name="DGap: gap model positions (manip)",
+            topic="{ns}/manip_gap_model_positions",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: gap model velocities (manip)",
+            topic="{ns}/manip_gap_model_velocities",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: gap model positions (raw)",
+            topic="{ns}/raw_gap_model_positions",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            config_json='{"Enabled": false}',
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: gap model velocities (raw)",
+            topic="{ns}/raw_gap_model_velocities",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            config_json='{"Enabled": false}',
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: executed trajectory",
+            topic="{ns}/curr_exec_dg_traj",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            topic_must_exist=False,
+        ),
+        AdapterDisplayHint(
+            name="DGap: candidate trajectories",
+            topic="{ns}/candidate_tube_trajectories",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            config_json='{"Enabled": false}',
+            topic_must_exist=False,
+        ),
+        # Ground-truth pedestrians (from the arena_peds stream). dynamic_gap only *draws*
+        # these — it does not use them for planning — so overlaying them against the gap
+        # model estimates above is the direct way to see whether the estimates are wrong.
+        AdapterDisplayHint(
+            name="DGap: pedestrian histories (ground truth)",
+            topic="{ns}/pedestrian_histories",
+            topic_type="visualization_msgs/MarkerArray",
+            rviz_class="rviz_default_plugins/MarkerArray",
+            topic_must_exist=False,
+        ),
     ],
 )
 @requires_map_server
