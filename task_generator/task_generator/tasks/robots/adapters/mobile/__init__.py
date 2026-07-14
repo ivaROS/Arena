@@ -92,6 +92,13 @@ def _load_drl() -> type[Adapter]:
     return DrlAdapter
 
 
+@ADAPTERS["mobile"].register("hybrid")
+def _load_hybrid() -> type[Adapter]:
+    from .hybrid import HybridAdapter
+
+    return HybridAdapter
+
+
 @ADAPTERS["mobile"].register("none")
 def _load_none() -> type[Adapter]:
     from .none import NoneAdapter
