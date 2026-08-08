@@ -12,7 +12,7 @@
 	update = rebase
 [submodule "arena_training"]
 	path = arena_training
-	url = https://github.com/Arena-Rosnav/Arena-Training.git
+	url = https://github.com/ivaROS/Arena-Training.git
 	branch = main
 	update = rebase
 [submodule "arena_planners"]
