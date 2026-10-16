@@ -1,0 +1,8 @@
+# Arena uses this footprint when drawing the object on the authoring map and
+# when checking placement. Bounds are relative to the model's centre.
+name: tutorial_box1x2
+description: Self-contained 1 m x 2 m tutorial cube
+bounding_box:
+  - [-0.5, 0.5]  # local x limits
+  - [-1.0, 1.0]  # local y limits
+  - [0.0, 1.0]   # local z limits

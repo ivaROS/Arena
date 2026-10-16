@@ -1,0 +1,5 @@
+# Reusable light-divider wall preset.
+main:
+  - material: Plaster_Wall
+    height: 2.5   # metres above the floor
+    width: 0.05   # 5 cm thickness

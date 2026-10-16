@@ -1,0 +1,60 @@
+{
+  "static": [],
+  "dynamic": [
+    {
+      "name": "crossing_pedestrian1",
+      "model": "arenian",
+      "pose": [15.0, 18.0, 0],
+      "velocity": 1.0,
+      "desired_velocity": 1.0,
+      "waypoints": [
+        {"x": 17.0, "y": 16.0, "z": 0.0},
+        {"x": 0.0, "y": 16.0, "z": 0.0}
+      ]
+    },
+    {
+      "name": "crossing_pedestrian2",
+      "model": "arenian",
+      "pose": [13.0, 26.0, 0.0],
+      "velocity": 0.75,
+      "desired_velocity": 0.75,
+      "waypoints": [
+        {"x": 13.0, "y": 26.0, "z": 0.0},
+        {"x": 0.0, "y": 26.0, "z": 0.0}
+      ]
+    },
+    {
+      "name": "crossing_pedestrian3",
+      "model": "arenian",
+      "pose": [16.0, 14.0, 0],
+      "velocity": 0.75,
+      "desired_velocity": 0.75,
+      "waypoints": [
+        {"x": 17.0, "y": 14.5, "z": 0.0},
+        {"x": 8.0, "y": 14.5, "z": 0.0},
+        {"x": 8.0, "y": 0.0, "z": 0.0},
+        {"x": 8.0, "y": 14.5, "z": 0.0}
+      ]
+    },
+    {
+      "name": "crossing_pedestrian4",
+      "model": "arenian",
+      "pose": [0.0, 21.5, 0.0],
+      "velocity": 0.75,
+      "desired_velocity": 0.75,
+      "waypoints": [
+        {"x": 0.0, "y": 21.5, "z": 0.0},
+        {"x": 17.0, "y": 21.5, "z": 0.0}
+      ]
+    }
+  ],
+  "robots": [
+    {
+      "start": [9.0, 2.0, 0.0],
+      "phases": [
+        {"goto": [9.0, 30.0, 0.0]}
+      ]
+    }
+  ],
+  "regions": {}
+}

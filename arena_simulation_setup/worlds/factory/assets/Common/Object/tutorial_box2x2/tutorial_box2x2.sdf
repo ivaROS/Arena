@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- Self-contained 1 m cube used by this tutorial world. -->
+<sdf version="1.9">
+  <model name="tutorial_box2x2">
+    <static>true</static>
+    <link name="box_link">
+      <!-- SDF poses geometry about its centre. z=0.5 puts the bottom at z=0. -->
+      <pose>0 0 0.5 0 0 0</pose>
+      <collision name="collision">
+        <geometry>
+          <box><size>2.0 2.0 1.0</size></box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box><size>2.0 2.0 1.0</size></box>
+        </geometry>
+        <material>
+          <ambient>0.75 0.35 0.08 1</ambient>
+          <diffuse>0.85 0.45 0.12 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

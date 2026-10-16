@@ -1,0 +1,46 @@
+diff --git a/arena_runtime/arena_runtime/arena_runtime/sim/gazebo_simulator/gazebo_simulator.py b/arena_runtime/arena_runtime/arena_runtime/sim/gazebo_simulator/gazebo_simulator.py
+index 42c0fa6..1835340 100644
+--- a/arena_runtime/arena_runtime/arena_runtime/sim/gazebo_simulator/gazebo_simulator.py
++++ b/arena_runtime/arena_runtime/arena_runtime/sim/gazebo_simulator/gazebo_simulator.py
+@@ -535,20 +535,27 @@ class GazeboSimulator(BaseSim):
+         if clear_existing:
+             await self.remove_world()
+         for wall in walls:
+-            wall_name = self._realizer.realize(f"wall_{next(self._wall_counter)}")
+-            wall_sdf = _generate_wall_sdf(
+-                name=wall_name,
+-                walls=[wall],
+-                height=2.0,
+-                thickness=0.05,
+-                base_position=(0, 0, 0),
+-            )
+-            if not wall_sdf:
+-                self._logger.error(f"Failed to generate SDF for wall: {wall_name}")
+-                continue
+-            async with self._semaphore:
+-                await self._spawn_sdf(wall_name, wall_sdf, Pose())
+-            self._walls_entities.append(wall_name)
++            segments, _decorations = await wall.assets()
++
++            # Wall presets can expand one logical wall into several segments
++            # with independent heights and widths. Preserve those authored
++            # dimensions instead of replacing every wall with the old Gazebo
++            # defaults (2 m high and 5 cm thick).
++            for segment in segments:
++                wall_name = self._realizer.realize(f"wall_{next(self._wall_counter)}")
++                wall_sdf = _generate_wall_sdf(
++                    name=wall_name,
++                    walls=[segment],
++                    height=segment.height,
++                    thickness=segment.width,
++                    base_position=(0, 0, 0),
++                )
++                if not wall_sdf:
++                    self._logger.error(f"Failed to generate SDF for wall: {wall_name}")
++                    continue
++                async with self._semaphore:
++                    await self._spawn_sdf(wall_name, wall_sdf, Pose())
++                self._walls_entities.append(wall_name)
+         return True
+ 
+     async def remove_world(self) -> bool:

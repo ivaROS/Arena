@@ -1,0 +1,205 @@
+# WORLD GEOMETRY DRAFT
+# This is valid YAML and can be launched as-is. Read and change the notes while
+# turning it into the student's final room.
+
+# A level contains a list of zones. A zone is a named navigable area such as a
+# room, corridor, or lobby. This example deliberately uses one big room.
+zones:
+  - name: big_room
+    description: Large room for learning walls, objects, and scenario testing
+
+    # Floor material identifier. It participates in the Arena world model, but
+    # Gazebo currently supplies its physical floor from the base ground plane.
+    material:
+      - Common/Material/Porcelain_Tile_4
+      - {}
+
+    # CORNERS: ordered floor polygon in metres.
+    # These four points make a 20 m x 15 m rectangle. List points around the
+    # edge without crossing lines and do not repeat the first point at the end.
+    corners:
+      - {x: 0.0,  y: 0.0,  z: 0.0}  # south-west
+      - {x: 17.0, y: 0.0,  z: 0.0}  # south-east
+      - {x: 17.0, y: 33.0, z: 0.0}  # north-east
+      - {x: 0.0,  y: 33.0, z: 0.0}  # north-west
+
+    # WALLS: physical boundary segments. Corners do not create walls by
+    # themselves, so the endpoints below explicitly connect the four corners.
+    # `kind` resolves a local preset under assets/Common/Wall/<kind>/<kind>.yaml.
+    walls:
+      # South: a 40 cm structural wall.
+      - start: {x: 0.0, y: 0.0, z: 0.0}
+        end: {x: 17.0, y: 0.0, z: 0.0}
+        kind: standard_wall
+
+      # East: a normal 15 cm wall.
+      - start: {x: 17.0, y: 0.0, z: 0.0}
+        end: {x: 17.0, y: 33.0, z: 0.0}
+        kind: standard_wall
+
+      # North: a thin 5 cm divider, included to make comparison easy in Gazebo.
+      - start: {x: 17.0, y: 33.0, z: 0.0}
+        end: {x: 0.0, y: 33.0, z: 0.0}
+        kind: standard_wall
+
+      # West: another normal wall.
+      - start: {x: 0.0, y: 33.0, z: 0.0}
+        end: {x: 0.0, y: 0.0, z: 0.0}
+        kind: standard_wall
+
+    # DOORS: managed openings. Empty for this exercise. To add one later, split
+    # its wall into two segments so no wall remains behind the door, then put a
+    # door entry in this list.
+    doors: []
+
+    # ELEVATORS: level-changing mechanisms. Not needed in a one-level room.
+    elevators: []
+
+    # ENTITIES: objects permanently belonging to this room.
+    entities:
+      static:
+        # `name` must be unique. `model` resolves the included local box asset.
+        # Compact pose form is [x, y, yaw], with yaw measured in radians.
+        - name: box_1
+          model: tutorial_box2x2
+          pose: [3.0, 3.0, 0.0] # (20, 20) to (40, 40)
+          bbox: [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
+
+        - name: box_2
+          model: tutorial_box2x4
+          pose: [3.0, 6.5, 0.0] # (40, 20) to (80, 40) (flip x and y)
+          bbox: [[-1.0, 1.0], [-2.0, 2.0], [0.0, 1.0]]
+
+        - name: box_3
+          model: tutorial_box
+          pose: [4.5, 9.5, 0.0] # (86, 38) to (96, 48) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_4
+          model: tutorial_box15x1
+          pose: [4.25, 15.5, 0.0] # (150, 35) to (160, 50) (flip x and y)
+          bbox: [[-0.75, 0.75], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_5
+          model: tutorial_box
+          pose: [4.5, 23.1, 0.0] # (226, 40) to (236, 50) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_6
+          model: tutorial_box
+          pose: [6.0, 5.7, 0.0] # (52, 60) to (62, 70) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_7
+          model: tutorial_box
+          pose: [6.5, 20.5, 0.0] # (200, 60) to (210, 70) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_8
+          model: tutorial_box
+          pose: [6.5, 24.5, 0.0] # (240, 60) to (250, 70) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_9
+          model: tutorial_box
+          pose: [6.5, 28.5, 0.0] # (280, 60) to (290, 70) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_10
+          model: tutorial_box1x2
+          pose: [7.5, 7.0, 0.0] # (60, 70) to (80, 80) (flip x and y)
+          bbox: [[-0.5, 0.5], [-1.0, 1.0], [0.0, 1.0]]
+
+        - name: box_11
+          model: tutorial_box1x15
+          pose: [7.5, 9.5, 0] # (90, 70) to (100, 80) (flip x and y)
+          bbox: [[-0.5, 0.5], [-0.75, 0.75], [0.0, 1.0]]
+
+        - name: box_12
+          model: tutorial_box2x1
+          pose: [7.0, 12.5, 0.0] # (118, 60) to (128, 80) (flip x and y)
+          bbox: [[-1.0, 1.0], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_13
+          model: tutorial_box2x1
+          pose: [7.0, 14.0, 0.0] # (135, 60) to (145, 80) (flip x and y)
+          bbox: [[-1.0, 1.0], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_14
+          model: tutorial_box
+          pose: [10.5, 4.5, 0.0] # (40, 100) to (50, 110) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_15
+          model: tutorial_box
+          pose: [10.5, 8.25, 0.0] # (75, 100) to (85, 110) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_16
+          model: tutorial_box
+          pose: [10.5, 12.0, 0.0] # (115, 100) to (125, 110) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_17
+          model: tutorial_box2x1
+          pose: [10.0, 18.5, 0.0] # (180, 90) to (190, 110) (flip x and y)
+          bbox: [[-1.0, 1.0], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_18
+          model: tutorial_box2x1
+          pose: [10.0, 20.0, 0.0] # (195, 90) to (205, 110) (flip x and y)
+          bbox: [[-1.0, 1.0], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_19
+          model: tutorial_box1x15
+          pose: [9.5, 23.0, 0.0] # (225, 90) to (235, 100) (flip x and y)
+          bbox: [[-0.5, 0.5], [-0.75, 0.75], [0.0, 1.0]]
+
+        - name: box_20
+          model: tutorial_box2x4
+          pose: [10.25, 30.5, 0.0] # (290, 95) to (320, 110) (flip x and y)
+          bbox: [[-1.0, 1.0], [-2.0, 2.0], [0.0, 1.0]]
+
+        - name: box_21
+          model: tutorial_box2x4
+          pose: [6.75, 2.5, 0.0] # (290, 95) to (320, 110) (flip x and y)
+          bbox: [[-1.0, 1.0], [-2.0, 2.0], [0.0, 1.0]]
+
+        - name: box_22
+          model: tutorial_box
+          pose: [11.5, 10.5, 0.0] # (100, 110) to (110, 120) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_23
+          model: tutorial_box15x1
+          pose: [12.5, 15.0, -3.0] # trial and error needed
+          bbox: [[-0.75, 0.75], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_24
+          model: tutorial_box
+          pose: [13.0, 18.5, 0.0] # (180, 125) to (190, 135) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_25
+          model: tutorial_box
+          pose: [12.5, 22.0, 0.0] # (215, 120) to (225, 130) (flip x and y)
+          bbox: [[-0.25, 0.25], [-0.25, 0.25], [0.0, 1.0]]
+
+        - name: box_26
+          model: tutorial_box15x1
+          pose: [13.75, 23.5, 3.0] # (235, 130) to (245, 145) (flip x and y)
+          bbox: [[-0.75, 0.75], [-0.5, 0.5], [0.0, 1.0]]
+
+        - name: box_27
+          model: tutorial_box2x4
+          pose: [14.0, 26.5, 0.0] # (245, 130) to (285, 150) (flip x and y)
+          bbox: [[-1.0, 1.0], [-2.0, 2.0], [0.0, 1.0]]
+
+        - name: box_28
+          model: tutorial_box2x2
+          pose: [14.0, 30.0, 0.0] # (290, 130) to (310, 150) (flip x and y)
+          bbox: [[-1.0, 1.0], [-1.0, 1.0], [0.0, 1.0]]
+
+      # Dynamic world entities are possible, but experiment pedestrians are
+      # clearer in scenarios, where their routes can change between tests.
+      dynamic: []

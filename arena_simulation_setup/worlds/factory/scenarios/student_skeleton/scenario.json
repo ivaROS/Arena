@@ -1,0 +1,13 @@
+{
+  "static": [],
+  "dynamic": [],
+  "robots": [
+    {
+      "start": [8.0, 2.0, 0.0],
+      "phases": [
+        {"goto": [8.0, 30.0, 0.0]}
+      ]
+    }
+  ],
+  "regions": {}
+}
