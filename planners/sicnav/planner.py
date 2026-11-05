@@ -24,10 +24,12 @@ projection. True SICNav-p would additionally need a human-goal datasource.
 from __future__ import annotations
 
 import configparser
+import gc
 import logging
 import math
 import os
 import pathlib
+import threading
 import time
 
 import numpy as np
@@ -42,6 +44,61 @@ _log = logging.getLogger("arena_planners.sicnav")
 # Opt-in file debug (SICNAV_DEBUG=/path): the bridge consumes the subprocess
 # stdout/stderr, so log key per-step data to a file we can read directly.
 _DEBUG_PATH = os.environ.get("SICNAV_DEBUG")
+
+# --- Memory-leak mitigation -------------------------------------------------
+# CAMPC appends a deepcopy of every step's solution, guess, reference, debug text
+# and full IPOPT iteration log to per-scenario lists (all_x_val, all_u_val, ...,
+# solver_summary[...]) and only clears them in init_mpc(). Nothing here reads
+# more than the last entry, so keep a short tail instead of the whole history.
+_HISTORY_KEEP: int = int(os.environ.get("SICNAV_HISTORY_KEEP", "8"))
+# Rebuilding the whole CasADi/IPOPT problem on every episode reset re-creates the
+# Opti graph, every cs.Function and the ORCA Callback, and the old objects are not
+# reliably freed. The problem size never changes here (always exactly _MAX_HUMANS
+# humans, no static obstacles), so by default build it ONCE and only reset the
+# per-episode state. Set SICNAV_REUSE_MPC=0 to restore the old rebuild-per-episode
+# behaviour.
+_REUSE_MPC: bool = os.environ.get("SICNAV_REUSE_MPC", "1") != "0"
+_needs_hum_reset: bool = False
+
+_HISTORY_LISTS = (
+    "all_x_val", "all_u_val", "all_x_guess", "all_u_guess", "all_x_goals",
+    "all_u_goals", "all_debug_text", "all_goal_diff", "calc_times",
+)
+
+
+def _rss_mb() -> float:
+    """Current resident memory of this process in MB (Linux)."""
+    try:
+        with open("/proc/self/status") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024.0
+    except OSError:
+        pass
+    return float("nan")
+
+
+def _trim_history(policy) -> None:
+    """Drop all but the last _HISTORY_KEEP entries of CAMPC's per-step logs."""
+    if policy is None or _HISTORY_KEEP <= 0:
+        return
+    for name in _HISTORY_LISTS:
+        lst = getattr(policy, name, None)
+        if isinstance(lst, list) and len(lst) > _HISTORY_KEEP:
+            del lst[:-_HISTORY_KEEP]
+    summary = getattr(policy, "solver_summary", None)
+    if isinstance(summary, dict):
+        for lst in summary.values():
+            if isinstance(lst, list) and len(lst) > _HISTORY_KEEP:
+                del lst[:-_HISTORY_KEEP]
+    # mpc_sol_succ is read with [-1] and np.any(...) ("any success so far this
+    # scenario"), so trim it but keep one True if any was seen.
+    succ = getattr(policy, "mpc_sol_succ", None)
+    if isinstance(succ, list) and len(succ) > _HISTORY_KEEP:
+        had_success = any(succ)
+        del succ[:-_HISTORY_KEEP]
+        if had_success and not any(succ):
+            succ.insert(0, True)
 
 
 def _dbg(msg: str) -> None:
@@ -272,7 +329,8 @@ def _build_policy() -> CollisionAvoidMPC:
     policy.set_phase("test")
     policy.set_device("cpu")
     policy.set_env(_Env(_TIME_STEP))  # after configure: builds dummy human w/ priviledged flag
-    _log.info("SICNav CAMPC initialised (priviledged_info=%s, horiz=%s)", policy.priviledged_info, policy.horiz)
+    _log.info("SICNav CAMPC initialised (priviledged_info=%s, horiz=%s, reuse=%s, rss=%.0f MB)",
+              policy.priviledged_info, policy.horiz, _REUSE_MPC, _rss_mb())
     return policy
 
 
@@ -707,6 +765,18 @@ def step(features: dict) -> list[float]:
     _dbg(f"goal={[round(g, 2) for g in goal_xy]} robot v=({round(robot.vx, 3)},{round(robot.vy, 3)}) "
          f"closest_hum={[(round(h.px, 2), round(h.py, 2)) for h in humans[:3]]}")
 
+    global _needs_hum_reset
+    if _needs_hum_reset and getattr(_policy, "mpc_env", None) is not None:
+        # Reused MPC: re-seed the ORCA model with this episode's first humans
+        # (what init_mpc() does on a fresh build).
+        try:
+            _policy.reset_f_orca(joint_state, None, None)
+        except Exception as exc:
+            _log.warning("SICNav reset_f_orca failed (%s); rebuilding MPC", exc)
+            _policy = _build_policy()
+        _needs_hum_reset = False
+    _trim_history(_policy)
+
     try:
         t_solve = time.perf_counter()
         action = _policy.predict(joint_state)
@@ -781,7 +851,19 @@ def on_reset(episode_id: str, initial_state: dict | None) -> None:
     global _policy, _aligning, _last_ref_key
     global _frozen_steps, _goaround_active
     global _align_goal_key, _align_used, _use_mpc
-    _policy = None
+    global _needs_hum_reset
+    rss_before = _rss_mb()
+    if _REUSE_MPC and _policy is not None and getattr(_policy, "mpc_env", None) is not None:
+        # Keep the compiled problem; clear warmstart, reference and history.
+        _policy.reset_scenario_values()
+        _policy.ref_poses_all = None
+        _policy.ref_actions_all = None
+        _needs_hum_reset = True
+    else:
+        _policy = None
+        _needs_hum_reset = False
+    gc.collect()
+    _log.info("SICNav reset (episode %s): rss %.0f -> %.0f MB", episode_id, rss_before, _rss_mb())
     _aligning = False
     _last_ref_key = None
     _frozen_steps = 0
@@ -791,6 +873,61 @@ def on_reset(episode_id: str, initial_state: dict | None) -> None:
     _use_mpc = False
 
 
+def _proc_start_time(pid: int) -> str | None:
+    """Kernel start time of ``pid`` (field 22 of /proc/<pid>/stat), or None if gone."""
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            stat = fh.read()
+    except OSError:
+        return None
+    # comm (field 2) may contain spaces; fields after the closing ')' are fixed.
+    return stat.rsplit(")", 1)[1].split()[19]
+
+
+def _proc_parent(pid: int) -> int | None:
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            return int(fh.read().rsplit(")", 1)[1].split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _start_orphan_watchdog(levels: int = 3, period_s: float = 5.0) -> None:
+    """Exit if the process that launched us goes away.
+
+    The bridge starts this planner with ``start_new_session=True``, so it never
+    receives the launch's SIGINT and only stops if the edge node shuts down
+    cleanly. When training is interrupted (Ctrl+C, a crash, a killed launch) the
+    planner is orphaned and keeps its whole MPC (GBs) resident forever. Watch the
+    first few ancestors (ros2 run wrapper, edge node, ...) and exit when any of
+    them disappears or is replaced by a different process with the same PID.
+    """
+    ancestors: list[tuple[int, str]] = []
+    pid = os.getpid()
+    for _ in range(levels):
+        parent = _proc_parent(pid)
+        if parent is None or parent <= 1:
+            break
+        start = _proc_start_time(parent)
+        if start is None:
+            break
+        ancestors.append((parent, start))
+        pid = parent
+    if not ancestors:
+        return
+
+    def _watch() -> None:
+        while True:
+            time.sleep(period_s)
+            for apid, astart in ancestors:
+                if _proc_start_time(apid) != astart:
+                    _log.warning("SICNav: launcher process %d is gone; exiting orphaned planner", apid)
+                    os._exit(0)
+
+    threading.Thread(target=_watch, name="sicnav-orphan-watchdog", daemon=True).start()
+
+
 if __name__ == "__main__":
+    _start_orphan_watchdog()
     manifest = load_manifest(pathlib.Path(__file__).parent / "planner.yaml")
     main_loop(step, manifest=manifest, on_reset=on_reset)
