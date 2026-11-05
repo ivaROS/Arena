@@ -162,7 +162,12 @@ class EnvironmentManager(NodeInterface):
         """
         Loads given robot into the simulator
         """
-        await self._human_simulator.spawn_robot(robots=tuple(map(self.realize, robots)))
+        success = await self._human_simulator.spawn_robot(robots=tuple(map(self.realize, robots)))
+        failed = [r.name for r, ok in zip(robots, success, strict=False) if not ok]
+        if failed:
+            # Continuing would run every episode with no robot in the sim
+            # (no TF, empty scans, STEP_LIMIT/FATAL episodes poisoning training).
+            raise RuntimeError(f"Failed to spawn robot(s) {failed}; refusing to continue without them")
         return robots
 
     async def move_robot(self, robots: Sequence[Robot]) -> Sequence[bool]:

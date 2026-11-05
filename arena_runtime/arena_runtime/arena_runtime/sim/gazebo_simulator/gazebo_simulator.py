@@ -6,6 +6,7 @@ GazeboSimulator is per-env on task_generator_node and adapts env-namespace state
 import asyncio
 import itertools
 import math
+import os
 import time
 import traceback
 import typing
@@ -15,6 +16,7 @@ import arena_robots.Robot
 import launch
 import launch_ros
 import rclpy.impl.rcutils_logger
+import rclpy.qos
 import rclpy.time
 import tf2_ros
 from arena_people_msgs.msg import Pedestrian, Pedestrians
@@ -167,10 +169,19 @@ class GazeboHost(SimLifecycle):
 
 
 class GazeboSimulator(BaseSim):
+    # set_pose goes through ONE ros_gz_bridge shared by every env. When many requests are in
+    # flight at once some responses are never delivered; with the default 60 s timeout a single
+    # lost response stalls a reset for longer than the trainer waits (30 s), and lost requests
+    # pile up until resets never finish. Keep few requests in flight, give up quickly, retry.
+    _SET_POSE_TIMEOUT: float = float(os.environ.get("ARENA_GZ_SETPOSE_TIMEOUT", "5.0"))
+    _SET_POSE_ATTEMPTS: int = int(os.environ.get("ARENA_GZ_SETPOSE_ATTEMPTS", "4"))
+    _SET_POSE_CONCURRENCY: int = int(os.environ.get("ARENA_GZ_SETPOSE_CONCURRENCY", "4"))
+
     def __init__(self, *args: object, namespace: Namespace, **kwargs: object) -> None:
         super().__init__(*args, namespace=namespace, **kwargs)
 
         self._semaphore = asyncio.Semaphore(5)
+        self._pose_semaphore = asyncio.Semaphore(self._SET_POSE_CONCURRENCY)
 
         self._logger.info(f"Initializing GazeboSimulator with namespace: {namespace}")
 
@@ -284,7 +295,7 @@ class GazeboSimulator(BaseSim):
             req = SetEntityPose.Request()
             req.entity = EntityMsg(name=ped.name, type=EntityMsg.MODEL)
             req.pose = ped.pose
-            res = await self._service_set_entity_pose.call_timeout(req)
+            res = await self._set_pose(req)
             return bool(res and res.success)
 
         return await asyncio.gather(*(impl(p) for p in pedestrians.pedestrians))
@@ -326,7 +337,7 @@ class GazeboSimulator(BaseSim):
         req.entity = EntityMsg(name=sim_path, type=EntityMsg.MODEL)
         req.pose = pose.to_msg()
         try:
-            res = await self._service_set_entity_pose.call_timeout(req)
+            res = await self._set_pose(req)
             return bool(res and res.success)
         except Exception as e:
             self._logger.warning(f"set_robot_pose({sim_path!r}) failed: {e}")
@@ -356,6 +367,17 @@ class GazeboSimulator(BaseSim):
 
     # IMPL
 
+    async def _set_pose(self, request: SetEntityPose.Request) -> SetEntityPose.Response | None:
+        """set_pose with bounded concurrency, a short timeout and retries (see class comment)."""
+        for attempt in range(1, self._SET_POSE_ATTEMPTS + 1):
+            async with self._pose_semaphore:
+                res = await self._service_set_entity_pose.call_timeout(request, timeout_sec=self._SET_POSE_TIMEOUT)
+            if res is not None:
+                return res
+            self._logger.debug(f"set_pose for {request.entity.name} got no response (attempt {attempt}/{self._SET_POSE_ATTEMPTS})")
+        self._logger.warning(f"set_pose for {request.entity.name} failed after {self._SET_POSE_ATTEMPTS} attempts")
+        return None
+
     async def _move_entity(self, entity: Entity, entity_type: int = EntityMsg.MODEL) -> bool:
         async with self._semaphore:
             self._logger.debug(f"Attempting to move entity: {entity.sim_path}")
@@ -370,7 +392,7 @@ class GazeboSimulator(BaseSim):
 
             try:
                 await self._service_set_entity_pose.ensure()
-                result = await self._service_set_entity_pose.call_timeout(request)
+                result = await self._set_pose(request)
 
                 if result is None:
                     self._logger.error(f"Move service call failed for {entity.sim_path}")
@@ -395,8 +417,9 @@ class GazeboSimulator(BaseSim):
                         model = await (await entity.model.resolve()).model.get(ModelType.URDF, loader_args=_loader_args)
                     else:
                         model = await (await entity.model.resolve()).model.get(ModelType.SDF)
-                except Exception:
-                    self._logger.warning(f"Failed to resolve model for entity {entity.name}")
+                except Exception as e:
+                    level = self._logger.error if isinstance(entity, Robot) else self._logger.warning
+                    level(f"Failed to resolve model for entity {entity.name}: {e!r}")
                     self._logger.debug(traceback.format_exc())
                     return False
 
@@ -725,6 +748,13 @@ class GazeboSimulator(BaseSim):
         self._service_set_entity_pose = self.node.create_client_wrapper(
             SetEntityPose,
             "/world/default/set_pose",
+            # Default service QoS keeps only 10 responses; bursts of set_pose replies overflow it.
+            qos_profile=rclpy.qos.QoSProfile(
+                history=rclpy.qos.HistoryPolicy.KEEP_LAST,
+                depth=100,
+                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
+                durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            ),
         )
         self._service_control_world = self.node.create_client_wrapper(
             ControlWorld,

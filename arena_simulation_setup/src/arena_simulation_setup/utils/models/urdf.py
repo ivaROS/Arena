@@ -76,12 +76,18 @@ class ModelProvider_URDF(ModelProvider.provides(ModelType.URDF)):
                 raise subprocess.CalledProcessError(process.returncode or -1, cmd, output=stdout + stderr)
             model_desc = stdout.decode("utf-8")
 
-            async with aiofiles.open(model_path, 'w') as f:
+            # model_path is shared by every env/process loading this model (and is
+            # read by state_publisher.launch.py). Write it atomically, and parse the
+            # in-memory xacro output: re-reading the shared file raced with
+            # concurrent writers (truncated file -> ParseError -> robot never
+            # spawned, or silently picking up another env's namespaced URDF).
+            tmp_model_path = model_path.with_name(f".{model_path.name}.{os.getpid()}.{id(cmd)}.tmp")
+            async with aiofiles.open(tmp_model_path, 'w') as f:
                 await f.write(model_desc)
+            os.replace(tmp_model_path, model_path)
 
             base_dir = os.path.dirname(model_path)
-            tree = ET.parse(model_path)
-            root = tree.getroot()
+            root = ET.fromstring(stdout)
 
             for elem in root.iter():
                 if 'filename' not in elem.attrib:
