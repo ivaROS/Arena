@@ -694,11 +694,16 @@ class GazeboSimulator(BaseSim):
         pose.pose.pose = robot.pose.to_msg()
         pose.header.frame_id = "map"
 
-        self.node.create_publisher(
-            PoseWithCovarianceStamped,
-            self.node.service_namespace(robot.name, "initialpose"),
-            qos_profile=1,
-        ).publish(pose)
+        # Reuse one publisher per topic. Creating a fresh publisher on every call (each
+        # reset, up to 3x per move) leaked publishers and their QoS event handlers; the
+        # executor walks every handler on each spin, so after ~1-6 h it saturated the
+        # spin thread and service replies (set_pose, create, ...) started timing out.
+        topic = self.node.service_namespace(robot.name, "initialpose")
+        pubs = self.__dict__.setdefault("_initialpose_pubs", {})
+        pub = pubs.get(topic)
+        if pub is None:
+            pub = pubs[topic] = self.node.create_publisher(PoseWithCovarianceStamped, topic, qos_profile=1)
+        pub.publish(pose)
 
     async def _robot_move(self, robot: Robot) -> bool:
         name = robot.name

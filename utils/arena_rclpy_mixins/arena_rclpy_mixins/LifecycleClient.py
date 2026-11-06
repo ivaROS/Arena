@@ -89,7 +89,7 @@ class LifecycleClient(TimeNode, rclpy.node.Node):
 
 class AsyncLifecycleClient(AsyncNode):
     async def _call_lifecycle(self, srv_type: type, sub_path: str, node_name: str, request: object, timeout: float | None, **kwargs: object) -> object:
-        cli = self.create_client_wrapper(
+        cli = self.get_client_wrapper(
             srv_type,
             srv_name := os.path.join(node_name, sub_path),
             **kwargs,

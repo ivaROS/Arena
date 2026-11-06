@@ -170,6 +170,20 @@ class AsyncNode(TimeNode, rclpy.node.Node):
             timeout=timeout,
         )
 
+    def get_client_wrapper(self, srv_type: type, srv_name: str, timeout: float = 60.0, **kwargs: object) -> ClientWrapper:
+        """Like create_client_wrapper, but reuses one client per (srv_type, srv_name).
+
+        Use this for calls made repeatedly (per episode/reset). Every rclpy client stays in
+        the node until destroyed and is walked by the executor on each spin, so creating one
+        per call makes spinning progressively slower until service replies time out.
+        """
+        cache: dict = self.__dict__.setdefault("_client_wrapper_cache", {})
+        key = (srv_type, srv_name)
+        cli = cache.get(key)
+        if cli is None:
+            cli = cache[key] = self.create_client_wrapper(srv_type, srv_name, timeout, **kwargs)
+        return cli
+
     def create_action_client_wrapper(self, action_type: type, action_name: str, timeout: float = 60.0, *, callback_group: rclpy.client.CallbackGroup | None = None) -> ActionClientWrapper:
         return ActionClientWrapper(
             self,

@@ -240,7 +240,7 @@ class Nav2Adapter(MobileAdapter):
         if state.id != lifecycle_msgs.msg.State.PRIMARY_STATE_ACTIVE:
             return False
 
-        cli = robot.node.create_client_wrapper(srv_type, srv_name)
+        cli = robot.node.get_client_wrapper(srv_type, srv_name)
         await cli.ensure()
 
         result = await cli.call_timeout(req)
