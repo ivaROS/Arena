@@ -927,7 +927,26 @@ def _start_orphan_watchdog(levels: int = 3, period_s: float = 5.0) -> None:
     threading.Thread(target=_watch, name="sicnav-orphan-watchdog", daemon=True).start()
 
 
+def _enable_stack_dumps() -> None:
+    """`kill -USR1 <pid>` appends all thread stacks to ~/.ros/log/sicnav_stacks_<pid>.txt.
+
+    The edge node sends this when a ResetAck/CancelAck times out, to show what the
+    planner was busy with (the container has no SYS_PTRACE, so py-spy can't attach).
+    """
+    import faulthandler
+    import signal
+
+    try:
+        log_dir = os.environ.get("ROS_LOG_DIR") or os.path.expanduser("~/.ros/log")
+        os.makedirs(log_dir, exist_ok=True)
+        fh = open(os.path.join(log_dir, f"sicnav_stacks_{os.getpid()}.txt"), "a")  # noqa: SIM115
+        faulthandler.register(signal.SIGUSR1, file=fh, all_threads=True, chain=False)
+    except Exception:  # diagnostics must never break the planner
+        pass
+
+
 if __name__ == "__main__":
+    _enable_stack_dumps()
     _start_orphan_watchdog()
     manifest = load_manifest(pathlib.Path(__file__).parent / "planner.yaml")
     main_loop(step, manifest=manifest, on_reset=on_reset)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import glob
 import os
 import queue
 import signal
@@ -99,6 +100,37 @@ class PlannerProcess:
                 os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
             self._proc.wait()
         return self._proc.returncode  # type: ignore[return-value]
+
+    def request_stack_dump(self) -> list[int]:
+        """Send SIGUSR1 to the planner's Python descendants (not the `ros2 run` wrapper,
+        for which SIGUSR1 is fatal). Planners that register faulthandler dump stacks."""
+        if self._proc is None or self._proc.poll() is not None:
+            return []
+        signalled: list[int] = []
+        todo = [self._proc.pid]
+        while todo:
+            pid = todo.pop()
+            try:
+                with open(f"/proc/{pid}/task/{pid}/children") as fh:
+                    children = [int(c) for c in fh.read().split()]
+            except (OSError, ValueError):
+                continue
+            todo.extend(children)
+            for child in children:
+                try:
+                    with open(f"/proc/{child}/cmdline", "rb") as fh:
+                        cmd = fh.read().split(b"\0")
+                except OSError:
+                    continue
+                # Only planners that registered a handler create <name>_stacks_<pid>.txt;
+                # for any other process SIGUSR1 is fatal, so leave those alone.
+                log_dir = os.environ.get("ROS_LOG_DIR") or os.path.expanduser("~/.ros/log")
+                has_handler = bool(glob.glob(os.path.join(log_dir, f"*_stacks_{child}.txt")))
+                if has_handler and any(part.endswith(b"planner.py") for part in cmd):
+                    with contextlib.suppress(ProcessLookupError, PermissionError):
+                        os.kill(child, signal.SIGUSR1)
+                        signalled.append(child)
+        return signalled
 
     def __enter__(self) -> PlannerProcess:
         self.start()
@@ -413,7 +445,15 @@ class PlannerEdgeNode(ArenaMixinNode):
         assert self._push is not None
         t_before = self.sim_time
         self._push.send_frame(encode_frame(Reset(episode_id=episode_id, initial_state=initial_state)))
-        frame = await self._drain_until(ResetAck, timeout=self._ack_timeout.value)
+        try:
+            frame = await self._drain_until(ResetAck, timeout=self._ack_timeout.value)
+        except TimeoutError:
+            pids = self._proc.request_stack_dump() if self._proc is not None else []
+            self.get_logger().warning(
+                f"ResetAck timed out after {self._ack_timeout.value:.1f}s; "
+                f"planner stacks requested from pid(s) {pids} -> ~/.ros/log/sicnav_stacks_<pid>.txt"
+            )
+            raise
         if not isinstance(frame, ResetAck):
             raise ProtocolError(f"expected reset_ack, got {frame!r}")
         t_after = self.sim_time
