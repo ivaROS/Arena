@@ -2,4 +2,4 @@
 
 net="${1:-default}"
 
-ros2 run arena_models arena_models net "$net" fetch -o "$ARENA_ASSETS_DIR/$(basename "$net")" "$2"
+ros2 run arena_assets arena_assets net "$net" fetch -o "$ARENA_ASSETS_DIR/$(basename "$net")" "$2"

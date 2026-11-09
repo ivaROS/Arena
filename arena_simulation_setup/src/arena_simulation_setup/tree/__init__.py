@@ -245,8 +245,8 @@ class NetResolver(SimplePathResolver[IdentifierT], ResolverBase[IdentifierT], ty
                 [
                     'ros2',
                     'run',
-                    'arena_models',
-                    'arena_models',
+                    'arena_assets',
+                    'arena_assets',
                     '-s',
                     'net',
                     self._provider,
@@ -307,7 +307,7 @@ class NetResolver(SimplePathResolver[IdentifierT], ResolverBase[IdentifierT], ty
     def listall(self, *, network: bool = False, **kwargs: object) -> Iterator[IdentifierT]:
         """
         List all assets available. When *network* is True, also queries the
-        remote provider via ``ros2 run arena_models arena_models … list``.
+        remote provider via ``ros2 run arena_assets arena_assets … list``.
         """
         yield from super(SimplePathResolver, self).listall(**kwargs)
         if network:
@@ -316,8 +316,8 @@ class NetResolver(SimplePathResolver[IdentifierT], ResolverBase[IdentifierT], ty
                     [
                         'ros2',
                         'run',
-                        'arena_models',
-                        'arena_models',
+                        'arena_assets',
+                        'arena_assets',
                         '-s',
                         'net',
                         self._provider,
