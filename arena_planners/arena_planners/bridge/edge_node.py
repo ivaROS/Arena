@@ -186,6 +186,11 @@ class PlannerEdgeNode(ArenaMixinNode):
         self._ack_queue: asyncio.Queue[Frame] = asyncio.Queue()
         self._io_thread: threading.Thread | None = None
         self._io_stop = threading.Event()
+        # While >0 a control exchange (Reset/Cancel) is in flight: run_loop sends no Obs.
+        # With obs_policy=latest_only the obs socket is CONFLATEd (keeps only the newest
+        # unread frame), so an Obs sent after a Reset silently replaced it and the planner
+        # never acked (seen as ~5-20% task_generator:FATAL episodes).
+        self._control_holds = 0
 
         self._cmd_vel_pub: rclpy.publisher.Publisher | None = None
         self._seq: int = 0
@@ -389,6 +394,8 @@ class PlannerEdgeNode(ArenaMixinNode):
             with self.sim_time_rate(self._rate.value) as (done, rate_events):
                 while not done.is_set():
                     await rate_events.get()
+                    if self._control_holds:
+                        continue  # don't let an Obs overwrite a pending Reset/Cancel
 
                     t = self.sim_time
                     features = self._filter_wire_features(self._obs_manager.collect())
@@ -431,8 +438,12 @@ class PlannerEdgeNode(ArenaMixinNode):
     async def request_cancel(self) -> None:
         """Send Cancel and await CancelAck."""
         assert self._push is not None
-        self._push.send_frame(encode_frame(Cancel()))
-        frame = await self._drain_until(CancelAck, timeout=self._ack_timeout.value)
+        self._control_holds += 1
+        try:
+            self._send_control(encode_frame(Cancel()))
+            frame = await self._drain_until(CancelAck, timeout=self._ack_timeout.value)
+        finally:
+            self._release_control_hold()
         if not isinstance(frame, CancelAck):
             raise ProtocolError(f"expected cancel_ack, got {frame!r}")
 
@@ -444,8 +455,9 @@ class PlannerEdgeNode(ArenaMixinNode):
         """Send Reset and await ResetAck; warn if round-trip exceeds one sim step."""
         assert self._push is not None
         t_before = self.sim_time
-        self._push.send_frame(encode_frame(Reset(episode_id=episode_id, initial_state=initial_state)))
+        self._control_holds += 1
         try:
+            self._send_control(encode_frame(Reset(episode_id=episode_id, initial_state=initial_state)))
             frame = await self._drain_until(ResetAck, timeout=self._ack_timeout.value)
         except TimeoutError:
             pids = self._proc.request_stack_dump() if self._proc is not None else []
@@ -454,6 +466,8 @@ class PlannerEdgeNode(ArenaMixinNode):
                 f"planner stacks requested from pid(s) {pids} -> ~/.ros/log/sicnav_stacks_<pid>.txt"
             )
             raise
+        finally:
+            self._release_control_hold()
         if not isinstance(frame, ResetAck):
             raise ProtocolError(f"expected reset_ack, got {frame!r}")
         t_after = self.sim_time
@@ -465,6 +479,27 @@ class PlannerEdgeNode(ArenaMixinNode):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _send_control(self, buf: bytes) -> None:
+        """Queue a control frame as the newest outbound frame.
+
+        Pending Obs are discarded so the control frame is last (CONFLATE keeps it), and it
+        goes out via the I/O thread, the socket's only sender (ZMQ sockets are not
+        thread-safe; this used to be sent directly from the asyncio thread).
+        """
+        while True:
+            try:
+                self._obs_queue.get_nowait()
+            except queue.Empty:
+                break
+        self._obs_queue.put_nowait(buf)
+
+    def _release_control_hold(self) -> None:
+        self._control_holds = max(0, self._control_holds - 1)
+        if not self._control_holds:
+            # Drop actions computed for observations from before the reset/cancel.
+            while not self._action_queue.empty():
+                self._action_queue.get_nowait()
 
     def _filter_wire_features(self, features: dict) -> dict:
         """Drop features that aren't msgpack-serializable (raw ROS messages)."""
