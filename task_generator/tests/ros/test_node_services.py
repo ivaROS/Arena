@@ -547,3 +547,40 @@ def test_reset_episode_in_flight_resolves_skipped() -> None:
         assert stub._task.force_reset_called is False
 
     asyncio.run(run())
+
+
+def test_queue_episode_requeuing_live_mode_keeps_staged_params() -> None:
+    """Startup order used by the trainer: curriculum stage params are queued first,
+    then the task modes. Re-queuing the *currently active* mode is not a mode switch
+    and must not wipe the staged stage params (it used to, so every run silently
+    ignored the curriculum's starting stage)."""
+    import asyncio
+    import types
+
+    import task_generator_msgs.srv
+    from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+    from task_generator.node import EpisodeRuntime, TaskGenerator
+
+    stub = type("Stub", (), {})()
+    stub._episodes = EpisodeRuntime()
+    stub._staged_obstacles_params = {}
+    stub._staged_robots_params = {}
+    stub._publish_queue_state = lambda: None
+    live = lambda v: types.SimpleNamespace(value=types.SimpleNamespace(value=v))  # noqa: E731
+    stub.conf = types.SimpleNamespace(TaskMode=types.SimpleNamespace(TM_OBSTACLES=live("random"), TM_ROBOTS=live("random")))
+
+    Req = task_generator_msgs.srv.QueueEpisode.Request
+    stage = Req(keep_modules=True)
+    stage.obstacles_params = [Parameter(name="dynamic.n", value=ParameterValue(type=ParameterType.PARAMETER_INTEGER_ARRAY, integer_array_value=[14, 18]))]
+    asyncio.run(TaskGenerator._cb_queue_episode(stub, stage, task_generator_msgs.srv.QueueEpisode.Response()))
+    modes = Req(tm_robots="random", tm_obstacles="random", keep_modules=True)
+    resp = task_generator_msgs.srv.QueueEpisode.Response()
+    asyncio.run(TaskGenerator._cb_queue_episode(stub, modes, resp))
+
+    assert resp.success
+    assert "dynamic.n" in stub._staged_obstacles_params
+
+    # A genuine switch to a different mode still drops the stale leaves.
+    switch = Req(tm_obstacles="scenario", keep_modules=True)
+    asyncio.run(TaskGenerator._cb_queue_episode(stub, switch, task_generator_msgs.srv.QueueEpisode.Response()))
+    assert stub._staged_obstacles_params == {}

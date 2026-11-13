@@ -837,13 +837,27 @@ class TaskGenerator(ArenaMixinNode, SafeCallbackNode, rclpy.lifecycle.LifecycleN
                 validated_modules.append(mod_str)
 
         existing = self._episodes.pending_overrides or TaskModeOverrides(keep_modules=True)
+
+        # A mode switch is relative to the mode that will actually be active: the pending
+        # override if one is queued, else the live mode. Comparing against an empty pending
+        # override treated re-queuing the *current* mode as a switch and wiped staged params
+        # (the trainer queues the curriculum's starting stage, then the task modes, so every
+        # run silently ignored its starting stage).
+        task_mode_conf = getattr(getattr(self, "conf", None), "TaskMode", None)
+
+        def _effective(pending: str, live_attr: str) -> str:
+            if pending:
+                return pending
+            live = getattr(getattr(task_mode_conf, live_attr, None), "value", None)
+            return getattr(live, "value", "") if live else ""
+
         if request.tm_robots:
-            if request.tm_robots != existing.tm_robots:
+            if request.tm_robots != _effective(existing.tm_robots, "TM_ROBOTS"):
                 # Mode switch: drop stale leaves from the prior mode's namespace.
                 self._staged_robots_params.clear()
             existing.tm_robots = request.tm_robots
         if request.tm_obstacles:
-            if request.tm_obstacles != existing.tm_obstacles:
+            if request.tm_obstacles != _effective(existing.tm_obstacles, "TM_OBSTACLES"):
                 self._staged_obstacles_params.clear()
             existing.tm_obstacles = request.tm_obstacles
         if not request.keep_modules:
