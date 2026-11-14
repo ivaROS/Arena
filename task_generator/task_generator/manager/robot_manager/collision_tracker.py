@@ -25,9 +25,6 @@ _ACTION_CODES: dict[str | None, int] = {
     'approach': 3,
     'limit': 4,
 }
-_STOP_ACTION = _ACTION_CODES['stop']
-
-
 class CollisionTrackerNode(rclpy.node.Node):
     """Separate Node, same process, same executor as the task_generator.
 
@@ -44,6 +41,8 @@ class CollisionTrackerNode(rclpy.node.Node):
         rate_hz: float = 10.0,
         near_miss_margin: float = 0.0,
         default_pedestrian_radius: float = 0.3,
+        robot_robot_collisions: bool = True,
+        collision_count_slow_polygons: bool = False,
     ):
         super().__init__(
             'collision_tracker',
@@ -56,6 +55,8 @@ class CollisionTrackerNode(rclpy.node.Node):
         self._env: EnvironmentManager = robot_manager._environment_manager
         self._near_miss_margin = near_miss_margin
         self._default_peds_radius = default_pedestrian_radius
+        self._robot_robot_collisions = robot_robot_collisions
+        self._counted_action_code = _ACTION_CODES['slowdown' if collision_count_slow_polygons else 'stop']
         self._peds_msg: arena_people_msgs.msg.Pedestrians | None = None
 
         self._poly_cache: dict[str, dict] = {}
@@ -120,7 +121,7 @@ class CollisionTrackerNode(rclpy.node.Node):
 
         for name, entry in self._poly_cache.items():
             robot_poly = self._robot_polygon(entry, rx, ry, rth)
-            emits_collision_event = entry['action_code'] == _STOP_ACTION
+            emits_collision_event = entry['action_code'] == self._counted_action_code
 
             if not walls.is_empty and robot_poly.intersects(walls):
                 if emits_collision_event:
@@ -162,25 +163,26 @@ class CollisionTrackerNode(rclpy.node.Node):
                         events.append(ev)
                     polygons_hit[name] = entry['action_code']
 
-            managers = getattr(getattr(self._rm.node, '_robots_manager', None), 'managers', {})
-            for other_name, other in managers.items():
-                if other is self._rm:
-                    continue
-                other_pose = other.pose
-                if other_pose is None:
-                    continue
-                ox, oy, _ = other_pose.to_2d()
-                other_disc = shapely.Point(ox, oy).buffer(other.radius)
-                if not robot_poly.intersects(other_disc):
-                    continue
-                if emits_collision_event:
-                    ev = arena_robots_msgs.msg.CollisionEvent()
-                    ev.obstacle_id = f'<robot:{other_name}>'
-                    ev.polygon_name = name
-                    ev.distance = 0.0
-                    ev.obstacle_position = geometry_msgs.msg.Point(x=ox, y=oy, z=0.0)
-                    events.append(ev)
-                polygons_hit[name] = entry['action_code']
+            if self._robot_robot_collisions:
+                managers = getattr(getattr(self._rm.node, '_robots_manager', None), 'managers', {})
+                for other_name, other in managers.items():
+                    if other is self._rm:
+                        continue
+                    other_pose = other.pose
+                    if other_pose is None:
+                        continue
+                    ox, oy, _ = other_pose.to_2d()
+                    other_disc = shapely.Point(ox, oy).buffer(other.radius)
+                    if not robot_poly.intersects(other_disc):
+                        continue
+                    if emits_collision_event:
+                        ev = arena_robots_msgs.msg.CollisionEvent()
+                        ev.obstacle_id = f'<robot:{other_name}>'
+                        ev.polygon_name = name
+                        ev.distance = 0.0
+                        ev.obstacle_position = geometry_msgs.msg.Point(x=ox, y=oy, z=0.0)
+                        events.append(ev)
+                    polygons_hit[name] = entry['action_code']
 
         state = nav2_msgs.msg.CollisionMonitorState()
         if polygons_hit:

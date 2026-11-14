@@ -45,6 +45,17 @@ def generate_launch_description():
         description='Runtime env packing buffer in metres. Use 0 for literal world coordinates.',
     )
 
+    LaunchArgument(
+        name='robot_robot_collisions',
+        default_value='true',
+        description='Enable robot-to-robot collision detection and benchmark deduplication.',
+    )
+    LaunchArgument(
+        name='collision_count_slow_polygons',
+        default_value='false',
+        description='Count slowdown-polygon contacts instead of stop-polygon contacts.',
+    )
+
     launch_sim = launch.actions.IncludeLaunchDescription(
         PathJoinSubstitution([
             FindPackageShare('arena_bringup'),

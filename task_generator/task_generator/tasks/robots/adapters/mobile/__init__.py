@@ -12,6 +12,18 @@ if TYPE_CHECKING:
     from task_generator.tasks.robots.adapters import ResetContext
 
 
+def _as_bool(value: object, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    raise ValueError(f"{name} must be a boolean, got {value!r}")
+
+
 class MobileAdapter(Adapter):
     cap_displays: ClassVar[tuple[AdapterDisplayHint, ...]] = (
         AdapterDisplayHint(
@@ -30,11 +42,22 @@ class MobileAdapter(Adapter):
     )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
+        robot_robot_collisions = _as_bool(
+            kwargs.pop("robot_robot_collisions", True), "robot_robot_collisions"
+        )
+        collision_count_slow_polygons = _as_bool(
+            kwargs.pop("collision_count_slow_polygons", False), "collision_count_slow_polygons"
+        )
         super().__init__(*args, **kwargs)
         self._collision_tracker: CollisionTrackerNode | None = None
         polys = self.rm.robot.model.resolve_sync().caps.mobile.polygons_dict
         if polys:
-            self._collision_tracker = CollisionTrackerNode(self.rm, polys)
+            self._collision_tracker = CollisionTrackerNode(
+                self.rm,
+                polys,
+                robot_robot_collisions=robot_robot_collisions,
+                collision_count_slow_polygons=collision_count_slow_polygons,
+            )
             self.rm.node.executor.add_node(self._collision_tracker)
 
     async def on_reset(self, robot: RobotManager, ctx: ResetContext) -> None:

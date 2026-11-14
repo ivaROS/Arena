@@ -26,6 +26,8 @@ args (`sim`, `headless`, `world`, `use_sim_time`, `log_level`) go to
 | `human` | string | `dummy` for `dummy` sim, `hunav` for `gazebo`/`isaac` | Human-simulator backend |
 | `complexity` | string | `1` | `1` map+position known; `2` map known AMCL; `3` SLAM |
 | `record_data_dir` | string | `` (empty) | Directory for data recording; empty disables |
+| `robot_robot_collisions` | bool string | `true` | Enable robot-to-robot contact detection and reciprocal-event deduplication. `false` leaves robot-environment tracking enabled. |
+| `collision_count_slow_polygons` | bool string | `false` | Count contacts on `slowdown` polygons instead of `stop` polygons. |
 | `tm_robots` | string | `explore` | Robot task mode (legacy single-kind shorthand) |
 | `task_config` | string | `` (empty) | Path to a [TaskModeSpec YAML](../configs/tasks/README.md); empty → synthesize from `tm_robots` (wins if both set) |
 | `tm_obstacles` | string | `random` | Obstacle task mode |
@@ -37,6 +39,20 @@ args (`sim`, `headless`, `world`, `use_sim_time`, `log_level`) go to
 | `debug` | bool string | `False` | Enable debug features |
 | `auto_reset` | bool expression | `true` | `true` = standalone: node auto-advances episodes; `false` = managed: external controller drives resets via `lifecycle/reset_episode` |
 | `optim` | comma-separated tokens | `$ARENA_OPTIM` or `` (empty) | Strip matching `<sensor>` blocks from each robot's URDF after xacro expansion (affects both Gazebo and Isaac via [`urdf.py`](../../arena_simulation_setup/src/arena_simulation_setup/utils/models/urdf.py)). Tokens: `no_camera` (strips `camera`/`depth`/`rgbd_camera`), `no_lidar` (strips `ray`/`gpu_lidar`). Unknown tokens warn and are ignored. Default reads `$ARENA_OPTIM` so you can set `export ARENA_OPTIM=no_camera,no_lidar` once per shell; CLI `optim:=...` overrides. |
+
+Collision counting can be adjusted for a launch or benchmark run:
+
+```bash
+arena launch sim:=gazebo robot_robot_collisions:=false
+arena benchmark --suite collision_recorder --contest collision_recorder \
+  robot_robot_collisions:=false collision_count_slow_polygons:=true
+```
+
+The first option defaults to enabled. When disabled, robot-robot detection and
+the benchmark's reciprocal robot-pair deduplication are both disabled, while
+robot-environment collision detection remains active. The second option
+defaults to counting `stop` polygon contacts; set it to `true` to count
+`slowdown` polygon contacts instead.
 
 ## Log level
 

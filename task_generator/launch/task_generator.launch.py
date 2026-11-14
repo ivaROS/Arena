@@ -155,6 +155,16 @@ def generate_launch_description():
         description="arm adapter kind",
     )
     record_data_dir = LaunchArgument(name="record_data_dir", default_value="")
+    robot_robot_collisions = LaunchArgument(
+        name="robot_robot_collisions",
+        default_value="true",
+        description="Enable robot-to-robot collision detection and benchmark deduplication.",
+    )
+    collision_count_slow_polygons = LaunchArgument(
+        name="collision_count_slow_polygons",
+        default_value="false",
+        description="Count slowdown-polygon contacts instead of stop-polygon contacts.",
+    )
     debug = LaunchArgument(name="debug", default_value="False")
     auto_reset = LaunchArgument(
         name="auto_reset",
@@ -280,6 +290,20 @@ def generate_launch_description():
                 # kwarg in RobotManager._adapter_kwargs_for, overlaying the
                 # cap-file YAML for the bound adapter.
                 dotted_overrides[f"robot.{k}"] = _coerce(v)
+        dotted_overrides["robot.mobile.robot_robot_collisions"] = _coerce(
+            launch.utilities.perform_substitutions(
+                context,
+                launch.utilities.normalize_to_list_of_substitutions(robot_robot_collisions.substitution),
+            )
+        )
+        dotted_overrides["robot.mobile.collision_count_slow_polygons"] = _coerce(
+            launch.utilities.perform_substitutions(
+                context,
+                launch.utilities.normalize_to_list_of_substitutions(
+                    collision_count_slow_polygons.substitution
+                ),
+            )
+        )
         if _planner_selector_override is not None:
             sel_key, sel_val = _planner_selector_override
             param_key = f"robot.mobile.{sel_key}"
