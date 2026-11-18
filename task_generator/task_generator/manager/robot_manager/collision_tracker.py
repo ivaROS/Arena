@@ -41,7 +41,7 @@ class CollisionTrackerNode(rclpy.node.Node):
         rate_hz: float = 10.0,
         near_miss_margin: float = 0.0,
         default_pedestrian_radius: float = 0.3,
-        robot_robot_collisions: bool = True,
+        robot_robot_collisions: bool = False,
         collision_count_slow_polygons: bool = False,
     ):
         super().__init__(

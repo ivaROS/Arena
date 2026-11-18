@@ -43,7 +43,7 @@ class MobileAdapter(Adapter):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         robot_robot_collisions = _as_bool(
-            kwargs.pop("robot_robot_collisions", True), "robot_robot_collisions"
+            kwargs.pop("robot_robot_collisions", False), "robot_robot_collisions"
         )
         collision_count_slow_polygons = _as_bool(
             kwargs.pop("collision_count_slow_polygons", False), "collision_count_slow_polygons"

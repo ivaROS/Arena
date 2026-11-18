@@ -26,7 +26,7 @@ args (`sim`, `headless`, `world`, `use_sim_time`, `log_level`) go to
 | `human` | string | `dummy` for `dummy` sim, `hunav` for `gazebo`/`isaac` | Human-simulator backend |
 | `complexity` | string | `1` | `1` map+position known; `2` map known AMCL; `3` SLAM |
 | `record_data_dir` | string | `` (empty) | Directory for data recording; empty disables |
-| `robot_robot_collisions` | bool string | `true` | Enable robot-to-robot contact detection and reciprocal-event deduplication. `false` leaves robot-environment tracking enabled. |
+| `robot_robot_collisions` | bool string | `false` | Enable robot-to-robot contact detection and reciprocal-event deduplication. `false` leaves robot-environment tracking enabled. |
 | `collision_count_slow_polygons` | bool string | `false` | Count contacts on `slowdown` polygons instead of `stop` polygons. |
 | `tm_robots` | string | `explore` | Robot task mode (legacy single-kind shorthand) |
 | `task_config` | string | `` (empty) | Path to a [TaskModeSpec YAML](../configs/tasks/README.md); empty → synthesize from `tm_robots` (wins if both set) |
@@ -48,9 +48,9 @@ arena benchmark --suite collision_recorder --contest collision_recorder \
   robot_robot_collisions:=false collision_count_slow_polygons:=true
 ```
 
-The first option defaults to enabled. When disabled, robot-robot detection and
-the benchmark's reciprocal robot-pair deduplication are both disabled, while
-robot-environment collision detection remains active. The second option
+The first option defaults to disabled. Set it to `true` to enable robot-robot
+detection and the benchmark's reciprocal robot-pair deduplication. With it
+disabled, robot-environment collision detection remains active. The second option
 defaults to counting `stop` polygon contacts; set it to `true` to count
 `slowdown` polygon contacts instead.
 

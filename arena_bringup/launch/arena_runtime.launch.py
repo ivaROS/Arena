@@ -47,7 +47,7 @@ def generate_launch_description():
 
     LaunchArgument(
         name='robot_robot_collisions',
-        default_value='true',
+        default_value='false',
         description='Enable robot-to-robot collision detection and benchmark deduplication.',
     )
     LaunchArgument(

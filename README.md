@@ -261,7 +261,7 @@ arena train sim:=gazebo mobile:=rosnav_rl train_config:=dreamer_training_config.
 - `arena train` brings up the runtime and the trainer together. The number of parallel
   training environments comes from `arena_cfg.general.n_envs` in the config YAML.
 - Watch it live with `arena viz --all`.
-- Metrics log to **Weights & Biases** automatically.
+- Metrics can be logged to **Weights & Biases** by enabling `arena_cfg.monitoring.wandb.enabled` in the training YAML (disabled in the default SB3 config).
 - Trained agents are saved to `arena_training/agents/<agent_name>/`
   (`training_config.yaml` + `best_model.zip`), then runnable with
   `mobile:=rosnav_rl mobile.agent:=<agent_name>`.

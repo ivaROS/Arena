@@ -157,7 +157,7 @@ def generate_launch_description():
     record_data_dir = LaunchArgument(name="record_data_dir", default_value="")
     robot_robot_collisions = LaunchArgument(
         name="robot_robot_collisions",
-        default_value="true",
+        default_value="false",
         description="Enable robot-to-robot collision detection and benchmark deduplication.",
     )
     collision_count_slow_polygons = LaunchArgument(
