@@ -4,10 +4,12 @@
     <static>true</static>
     <link name="link">
       <visual name="visual">
-        <pose>0 0 1.0 0 0 0</pose>
+        <!-- Static mesh baked from frame 17 of Fuel Mingfei/actor walk.dae (tools/bake_pose.py).
+             The original skinned walk.dae renders in its bind pose (T-pose) when used as a plain
+             visual. Baked mesh is in scene frame: feet at z=0, facing +x. Visual only, no collision. -->
         <geometry>
           <mesh>
-            <uri>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</uri>
+            <uri>meshes/arenian_walk.dae</uri>
           </mesh>
         </geometry>
       </visual>

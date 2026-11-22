@@ -11,13 +11,16 @@ import traceback
 import typing
 from collections.abc import Iterable, Sequence
 
+import ament_index_python.packages
 import arena_robots.Robot
 import launch
 import launch_ros
 import rclpy.impl.rcutils_logger
+import rclpy.qos
 import rclpy.time
 import tf2_ros
 from arena_people_msgs.msg import Pedestrian, Pedestrians
+from arena_people_msgs.srv import UpdatePedestrians
 from arena_rclpy_mixins import ArenaMixinNode
 from arena_rclpy_mixins.Async import ClientWrapper
 from arena_rclpy_mixins.shared import Namespace
@@ -85,6 +88,26 @@ class GazeboHost(SimLifecycle):
                 ]
             )
         )
+        # Separate launch so a missing (unbuilt) package cannot take the services bridge down;
+        # GazeboSimulator.pedestrian_update falls back to per-pedestrian set_pose without it.
+        try:
+            ament_index_python.packages.get_package_prefix("gz_pedestrian_bridge")
+        except ament_index_python.packages.PackageNotFoundError:
+            self._logger.warning("gz_pedestrian_bridge not built; pedestrians use one set_pose call each")
+        else:
+            await self._node.do_launch(
+                LaunchDescription(
+                    [
+                        launch_ros.actions.Node(
+                            package="gz_pedestrian_bridge",
+                            executable="gz_pedestrian_bridge",
+                            name="gz_pedestrian_bridge",
+                            output="screen",
+                            parameters=[{"use_sim_time": True, "world": "default"}],
+                        )
+                    ]
+                )
+            )
         await asyncio.gather(
             self._service_control_world.ensure(),
             self._service_delete_entity.ensure(),
@@ -171,6 +194,10 @@ class GazeboSimulator(BaseSim):
         super().__init__(*args, namespace=namespace, **kwargs)
 
         self._semaphore = asyncio.Semaphore(5)
+        # Keep in-flight set_pose requests below the service QoS depth (10) of ros_gz_bridge,
+        # which otherwise drops requests from large pedestrian bursts.
+        self._pedestrian_update_semaphore = asyncio.Semaphore(8)
+        self._warned_no_pedestrian_bridge = False
 
         self._logger.info(f"Initializing GazeboSimulator with namespace: {namespace}")
 
@@ -280,11 +307,31 @@ class GazeboSimulator(BaseSim):
         return await asyncio.gather(*(self._delete_entity(robot.sim_path) for robot in robots))
 
     async def pedestrian_update(self, pedestrians: Pedestrians) -> Sequence[bool]:
+        if not pedestrians.pedestrians:
+            return ()
+
+        # One request for all pedestrians -> gz set_pose_vector (gz_pedestrian_bridge).
+        if self._service_update_pedestrians.client.service_is_ready():
+            req = UpdatePedestrians.Request(pedestrians=pedestrians.pedestrians)
+            # Poses are superseded on the next tick; a lost reply must not stall the loop.
+            res = await self._service_update_pedestrians.call_timeout(req, timeout_sec=1.0)
+            if res is None:
+                return tuple(False for _ in pedestrians.pedestrians)
+            return tuple(r == UpdatePedestrians.Response.SUCCESS for r in res.results)
+
+        if not self._warned_no_pedestrian_bridge:
+            self._warned_no_pedestrian_bridge = True
+            self._logger.warning(
+                "/world/default/update_pedestrians unavailable; falling back to one set_pose call per pedestrian"
+            )
+
         async def impl(ped: Pedestrian) -> bool:
             req = SetEntityPose.Request()
             req.entity = EntityMsg(name=ped.name, type=EntityMsg.MODEL)
             req.pose = ped.pose
-            res = await self._service_set_entity_pose.call_timeout(req)
+            # Poses are superseded on the next tick; a lost reply must not stall the loop for 60 s.
+            async with self._pedestrian_update_semaphore:
+                res = await self._service_set_entity_pose.call_timeout(req, timeout_sec=1.0)
             return bool(res and res.success)
 
         return await asyncio.gather(*(impl(p) for p in pedestrians.pedestrians))
@@ -725,10 +772,24 @@ class GazeboSimulator(BaseSim):
         self._service_set_entity_pose = self.node.create_client_wrapper(
             SetEntityPose,
             "/world/default/set_pose",
+            # set_pose is called concurrently (pedestrian_update, fire-and-forget move_box); with
+            # the default depth (10) replies beyond the 10th are silently dropped and the
+            # awaiting caller stalls until call_timeout expires.
+            qos_profile=rclpy.qos.QoSProfile(
+                depth=1000,
+                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
+                durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            ),
         )
         self._service_control_world = self.node.create_client_wrapper(
             ControlWorld,
             "/world/default/control",
+        )
+        # Batched pedestrian poses (gz_pedestrian_bridge). Not awaited below: optional, and
+        # pedestrian_update falls back to per-pedestrian set_pose until it is available.
+        self._service_update_pedestrians = self.node.create_client_wrapper(
+            UpdatePedestrians,
+            "/world/default/update_pedestrians",
         )
         self._logger.info("Waiting for gazebo services...")
         services = (
