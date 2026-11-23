@@ -91,6 +91,7 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
         self._pedestrians: dict[int, dict] = {}
         self._wall_segments: list[WallSegment] = []
         self._wall_points: list[Point] = []
+        self._wall_points_xy: np.ndarray = np.empty((0, 2))
         self._agents_lock: asyncio.Lock = asyncio.Lock()
         self._agents_container: Agents = Agents()  # Container to hold all registered agents
         self._get_agents_container: Agents = Agents()  # Container specifically just to send the Agent attributes to Hunavsystemplugin
@@ -203,9 +204,28 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
             self._logger.error(f"Arena peds publisher setup failed: {e}")
             return False
 
+    # lightsfm sums exp(-(d - radius) / sigma_obstacle) over all obstacle points (sigma 0.2 m, no
+    # averaging), so a point 6 m away contributes ~e^-28 of one at contact distance: below float
+    # precision, trajectories match sending every point exactly (checked at 20/40/80 agents; a 3 m
+    # cutoff already diverged 0.1 m in an 80-agent crowd). Sending every wall point to every agent made
+    # ComputeAgents cost grow with agents x wall points (~100 ms at 40 agents, 275 ms at 80).
+    _WALL_POINT_RADIUS = 6.0
+
     def _update_agent_obstacles(self, current_agents: Agents) -> Agents:
-        for agent in current_agents.agents:
-            agent.closest_obs.extend(self._wall_points)
+        agents = current_agents.agents
+        if not agents:
+            return current_agents
+        if not self._wall_points:
+            for agent in agents:
+                agent.closest_obs = []
+            return current_agents
+
+        pos = np.array([(a.position.position.x, a.position.position.y) for a in agents])
+        d2 = ((pos[:, None, :] - self._wall_points_xy[None, :, :]) ** 2).sum(axis=2)
+        near = d2 <= self._WALL_POINT_RADIUS ** 2
+        for agent, mask in zip(agents, near):
+            # assign (not extend): the agents message is reused across ticks
+            agent.closest_obs = [self._wall_points[i] for i in np.flatnonzero(mask)]
         return current_agents
 
     async def _get_agents_callback(self, request: GetAgents.Request, response: GetAgents.Response) -> GetAgents.Response:
@@ -409,6 +429,7 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
 
         self._wall_segments.append(segment)
         self._wall_points.extend(self._wall_to_points(wall.start, wall.end))
+        self._wall_points_xy = np.array([(p.x, p.y) for p in self._wall_points]).reshape(-1, 2)
 
         self._logger.debug(f"Added wall segment {segment.id} from ({segment.start.x:.2f}, {segment.start.y:.2f}) to ({segment.end.x:.2f}, {segment.end.y:.2f})")
         self._logger.debug(f"Total wall segments: {len(self._wall_segments)}, Total wall points: {len(self._wall_points)}")
@@ -416,6 +437,7 @@ class HunavHumanSimulator(BaseHumanSimulator if typing.TYPE_CHECKING else DummyH
     async def _spawn_walls_impl(self, walls: Sequence[Wall]) -> bool:
         self._wall_segments = []
         self._wall_points = []
+        self._wall_points_xy = np.empty((0, 2))
 
         for wall in walls:
             self._add_wall(wall)
