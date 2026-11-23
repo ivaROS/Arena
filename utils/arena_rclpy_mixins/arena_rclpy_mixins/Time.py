@@ -246,21 +246,37 @@ class TimeNode(rclpy.node.Node):
             asyncio.Queue: Queue that yields the time delta in seconds at each rate interval.
         """
         interval = 1.0 / rate
-        last_time = self.sim_time
-        finish_time = last_time + Time.from_float(lifetime) if lifetime is not None else None
+        # Sim time advances in physics steps (e.g. 0.0333 s), so "fire once `interval` has passed since
+        # the last tick" rounds every tick up to the next step: 10 Hz became 7.5 Hz (3 steps = 0.0999 s
+        # < 0.1 s, so each tick waited for a 4th step) and 30 Hz became 15 Hz. Ticks are instead due on a
+        # fixed grid (start + k * interval), so the average rate is exact and only single intervals jitter
+        # by up to one step. The tolerance absorbs float error such as 3 * 0.0333 = 0.0999.
+        tolerance = 0.01 * interval
+        start = self.sim_time.to_seconds()
+        last = start
+        next_due = start + interval
+        finish = start + lifetime if lifetime is not None else None
 
         done = asyncio.Event()
         events: asyncio.Queue[float] = asyncio.Queue(maxsize=1000)
 
         async def _rate_loop():
-            nonlocal last_time
+            nonlocal last, next_due, finish
             while not done.is_set():
                 await asyncio.sleep(0.01)
-                now = self.sim_time
-                if is_put := (dt := (now - last_time).to_seconds()) >= interval:
-                    last_time = now
+                now = self.sim_time.to_seconds()
+                if now < last:  # sim time went backwards (sim restart): restart the grid from here
+                    if finish is not None:
+                        finish = now + (finish - last)
+                    last, next_due = now, now + interval
+                dt = now - last
+                if is_put := now >= next_due - tolerance:
+                    last = now
+                    next_due += interval
+                    if now >= next_due - tolerance:  # more than a whole interval late: skip ahead, don't burst
+                        next_due = now + interval
                     await events.put(dt)
-                if finish_time is not None and now >= finish_time:
+                if finish is not None and now >= finish:
                     done.set()
                     if not is_put:
                         await events.put(dt)
